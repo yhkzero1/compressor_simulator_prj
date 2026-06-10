@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>교육용 컴프레서 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:        #0c0d10;
+    --panel:     #17181c;
+    --panel-2:   #1b1d22;
+    --inset:     #0f1115;
+    --raise:     #24262c;
+    --line:      #2a2d34;
+    --line-2:    #363a42;
+    --text:      #d8dbe0;
+    --text-2:    #9aa0a8;
+    --text-3:    #686d77;
+    --accent:    #5fb2d4;
+    --accent-dim:#3f88a6;
+    --amber:     #caa24f;
+    --sage:      #82ab86;
+    --danger:    #cf6b5a;
+    --ui:   'Archivo', system-ui, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background:
+      radial-gradient(120% 80% at 50% -10%, #15171c 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: var(--ui);
+    min-height: 100vh;
+    padding: 32px 20px 56px;
+    display: flex;
+    justify-content: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Plugin shell ── */
+  .plugin {
+    width: 100%;
+    max-width: 1280px;
+    background: var(--panel);
+    border: 1px solid var(--line-2);
+    border-radius: 12px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.04) inset,
+      0 40px 80px -32px rgba(0,0,0,0.8),
+      0 2px 8px rgba(0,0,0,0.4);
+    overflow: hidden;
+  }
+
+  /* ── Title bar ── */
+  .titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 13px 22px;
+    background: linear-gradient(180deg, #1d1f24, #16181c);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 13px; }
+  .brand .mark { width: 30px; height: 30px; display: block; }
+  .brand-text { display: flex; flex-direction: column; gap: 3px; line-height: 1; }
+  .brand-text strong {
+    font-weight: 700; font-size: 15px; letter-spacing: 0.06em; color: var(--text);
+  }
+  .brand-text small {
+    font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .titlebar-meta { display: flex; align-items: center; gap: 10px; }
+  .chip {
+    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.06em;
+    color: var(--text-2);
+    background: var(--inset); border: 1px solid var(--line);
+    padding: 5px 10px; border-radius: 5px;
+  }
+  .chip.accent { color: var(--accent); border-color: var(--accent-dim); }
+
+  /* ── Body ── */
+  .body { padding: 18px 22px 24px; display: flex; flex-direction: column; gap: 16px; }
+  .tagline {
+    font-size: 12.5px; color: var(--text-3); letter-spacing: 0.01em;
+    margin: -2px 2px 2px;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 16px 18px;
+  }
+
+  .sec-head { display: flex; align-items: center; gap: 11px; margin-bottom: 15px; }
+  .sec-num {
+    font-family: var(--mono); font-size: 10px; font-weight: 500;
+    color: var(--accent); letter-spacing: 0.12em;
+  }
+  .sec-title {
+    font-weight: 600; font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; color: var(--text-2);
+  }
+  .sec-line { flex: 1; height: 1px; background: var(--line); }
+
+  /* ── Buttons ── */
+  .btn {
+    font-family: var(--ui); font-weight: 600; font-size: 12px; letter-spacing: 0.015em;
+    color: var(--text-2);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 7px 13px;
+    cursor: pointer;
+    transition: background .12s, color .12s, border-color .12s;
+    white-space: nowrap;
+  }
+  .btn:hover { color: var(--text); border-color: var(--line-2); background: var(--raise); }
+  .btn.selected {
+    color: var(--accent); border-color: var(--accent-dim);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--inset); }
+  .seg .btn { border: none; border-radius: 0; background: transparent; padding: 7px 12px; }
+  .seg .btn + .btn { border-left: 1px solid var(--line); }
+  .seg .btn:hover { background: rgba(255,255,255,0.03); }
+  .seg .btn.selected { background: color-mix(in srgb, var(--accent) 13%, transparent); color: var(--accent); }
+
+  /* ── Top toolbar ── */
+  .toolbar { display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
+  .tb-group { display: flex; flex-direction: column; gap: 8px; }
+  .tb-label {
+    font-weight: 600; font-size: 9.5px; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--text-3);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .tb-label .v { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0; text-transform: none; }
+  .chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .transport { display: flex; gap: 7px; margin-left: auto; }
+  #playOrigBtn.btn { }
+  #playBtn.btn { color: var(--accent); border-color: var(--accent-dim); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+  #playBtn.btn:hover { background: color-mix(in srgb, var(--accent) 17%, transparent); }
+  #stopBtn.btn { color: var(--danger); border-color: #5a3a36; background: rgba(207,107,90,0.06); }
+  #stopBtn.btn:hover { background: rgba(207,107,90,0.15); border-color: var(--danger); }
+
+  /* ── Knobs ── */
+  .knob-row {
+    display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap;
+  }
+  .dyn-grid {
+    display: flex; gap: 22px; flex-wrap: wrap; align-items: stretch;
+  }
+  .knob-bank { display: flex; gap: 10px; flex-wrap: wrap; }
+  .param { display: flex; flex-direction: column; align-items: center; gap: 9px; width: 92px; }
+  .param-label {
+    font-weight: 600; font-size: 9.5px; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  /* native range that the knob drives — kept for logic/a11y, hidden visually */
+  .knob-input {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+    opacity: 0; pointer-events: none;
+  }
+  .knob {
+    width: 76px; height: 76px; cursor: ns-resize; outline: none;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    border-radius: 50%;
+  }
+  .knob-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  .kb-track { fill: none; stroke: var(--line-2); stroke-width: 4.5; stroke-linecap: round; stroke-dasharray: 141.37 188.5; }
+  .kb-arc   { fill: none; stroke: var(--accent); stroke-width: 4.5; stroke-linecap: round; transition: stroke-dasharray .06s ease; }
+  .kb-cap   { fill: url(#knobCap); stroke: var(--line); stroke-width: 1; }
+  .kb-cap-ring { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 1; }
+  .kb-ptr   { stroke: var(--text-2); stroke-width: 2.4; stroke-linecap: round; transition: stroke .12s; }
+  .knob:hover .kb-ptr, .knob.dragging .kb-ptr { stroke: var(--accent); }
+  .knob:focus-visible { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .mark .arc { stroke: var(--accent); }
+  .knob.is-disabled { opacity: .38; pointer-events: none; }
+  .param-val {
+    font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text);
+    background: var(--inset); border: 1px solid var(--line);
+    padding: 4px 9px; border-radius: 5px; min-width: 70px; text-align: center;
+    letter-spacing: -0.01em;
+  }
+
+  .dyn-sep { width: 1px; background: var(--line); align-self: stretch; }
+
+  /* ── Faders (gain staging) ── */
+  .gain-col { display: flex; flex-direction: column; gap: 20px; min-width: 240px; max-width: 470px; flex: 1; justify-content: center; }
+  .fader { display: flex; flex-direction: column; gap: 9px; }
+  .fader-head { display: flex; justify-content: space-between; align-items: center; }
+  .fader-head .lbl {
+    font-weight: 600; font-size: 9.5px; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--text-3); white-space: nowrap;
+  }
+  .fader-head .right { display: flex; align-items: center; gap: 9px; }
+
+  input[type=range].fx {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 20px; background: transparent; cursor: pointer;
+  }
+  input[type=range].fx::-webkit-slider-runnable-track {
+    height: 4px; background: var(--inset); border: 1px solid var(--line); border-radius: 3px;
+  }
+  input[type=range].fx::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 12px; height: 18px; margin-top: -8px; border-radius: 3px;
+    background: linear-gradient(180deg, #3c4049, #23262c);
+    border: 1px solid var(--line-2);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    transition: border-color .12s;
+  }
+  input[type=range].fx:hover::-webkit-slider-thumb { border-color: var(--accent-dim); }
+  input[type=range].fx::-moz-range-track {
+    height: 4px; background: var(--inset); border: 1px solid var(--line); border-radius: 3px;
+  }
+  input[type=range].fx::-moz-range-thumb {
+    width: 12px; height: 18px; border-radius: 3px;
+    background: linear-gradient(180deg, #3c4049, #23262c);
+    border: 1px solid var(--line-2);
+  }
+  input[type=range].fx:disabled { opacity: .4; }
+
+  #autoMakeupBtn {
+    font-size: 10px; padding: 3px 9px; letter-spacing: 0.1em; border-radius: 4px;
+  }
+  #autoMakeupBtn.active {
+    color: var(--accent); border-color: var(--accent-dim); background: color-mix(in srgb, var(--accent) 15%, transparent);
+  }
+  .val-mono {
+    font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text);
+  }
+
+  /* ── Visualization row ── */
+  .viz-row { display: grid; grid-template-columns: minmax(0,1fr) 392px; gap: 16px; }
+  .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+  .canvas-well {
+    background: var(--inset);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 6px;
+  }
+  canvas { display: block; width: 100%; height: auto; border-radius: 3px; }
+
+  .legend-row {
+    font-family: var(--mono); font-size: 10.5px; color: var(--text-2);
+    margin-top: 11px; text-align: center; line-height: 1.7; letter-spacing: 0.01em;
+  }
+  .legend-row .sep { color: var(--line-2); margin: 0 6px; }
+
+  /* ── Meters ── */
+  .meters { display: flex; justify-content: space-around; align-items: flex-end; gap: 14px; padding-top: 2px; }
+  .meter { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  .meter-label {
+    font-family: var(--mono); font-size: 9.5px; font-weight: 500; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--text-3);
+  }
+  .meter-track {
+    width: 24px; height: 196px; background: var(--inset);
+    border: 1px solid var(--line); border-radius: 3px; overflow: hidden;
+    position: relative; display: flex;
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(255,255,255,0.035) 24px);
+  }
+  #inputMeterFill, #outputMeterFill { align-self: flex-end; width: 100%; transition: height .05s linear; }
+  #grMeterFill {
+    align-self: flex-start; width: 100%;
+    background: linear-gradient(180deg, var(--accent), var(--accent-dim));
+    transition: height .05s linear;
+  }
+  .meter-val {
+    font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--text);
+    background: var(--inset); border: 1px solid var(--line);
+    padding: 4px 6px; border-radius: 5px; width: 76px; text-align: center;
+  }
+
+  /* ── Accent swatches ── */
+  .ui-label { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--text-3); }
+  .swatches { display: flex; gap: 6px; align-items: center; margin-right: 6px; }
+  .swatch {
+    width: 15px; height: 15px; border-radius: 50%; padding: 0; cursor: pointer;
+    background: var(--sw); border: 1px solid rgba(255,255,255,0.18);
+    transition: transform .1s, box-shadow .1s;
+  }
+  .swatch:hover { transform: scale(1.15); }
+  .swatch.active { box-shadow: 0 0 0 2px var(--panel), 0 0 0 3px var(--sw); }
+
+  /* ── Help tooltips ── */
+  .help {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px; border-radius: 50%; vertical-align: middle;
+    border: 1px solid var(--line-2); color: var(--text-3);
+    font-family: var(--mono); font-size: 8.5px; font-weight: 500; line-height: 1;
+    cursor: help; position: relative; flex: none; margin-left: 4px;
+    letter-spacing: 0; transition: color .12s, border-color .12s;
+  }
+  .help:hover, .help:focus-visible { color: var(--accent); border-color: var(--accent-dim); outline: none; }
+  .help .tip {
+    position: absolute; bottom: calc(100% + 9px); left: 50%; transform: translateX(-50%) translateY(4px);
+    width: 200px; background: #0e1014; border: 1px solid var(--line-2); border-radius: 8px;
+    padding: 10px 12px; font-family: var(--ui); font-size: 11px; font-weight: 400; line-height: 1.55;
+    color: var(--text-2); letter-spacing: 0; text-transform: none; text-align: left;
+    box-shadow: 0 16px 36px -10px rgba(0,0,0,0.85);
+    opacity: 0; visibility: hidden; transition: opacity .13s, transform .13s; z-index: 40; pointer-events: none;
+  }
+  .help .tip strong { display: block; color: var(--text); font-weight: 600; font-size: 11.5px; margin-bottom: 4px; }
+  .help:hover .tip, .help:focus-visible .tip { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
+  .help .tip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--line-2);
+  }
+  .help.tl .tip { left: -3px; transform: translateY(4px); }
+  .help.tl:hover .tip, .help.tl:focus-visible .tip { transform: translateY(0); }
+  .help.tl .tip::after { left: 9px; }
+  .help.tr .tip { left: auto; right: -3px; transform: translateY(4px); }
+  .help.tr:hover .tip, .help.tr:focus-visible .tip { transform: translateY(0); }
+  .help.tr .tip::after { left: auto; right: 9px; }
+
+  /* ── Transfer-curve makeup toggle ── */
+  .curve-toggle {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.03em; color: var(--text-3);
+    text-transform: none; user-select: none; -webkit-user-select: none;
+  }
+  .curve-toggle input { accent-color: var(--accent); width: 13px; height: 13px; cursor: pointer; margin: 0; }
+  .curve-toggle:hover { color: var(--text-2); }
+
+  @media (max-width: 1000px) {
+    .viz-row { grid-template-columns: 1fr; }
+    .right-col { flex-direction: row; flex-wrap: wrap; }
+    .right-col > .card { flex: 1; min-width: 300px; }
+  }
+  @media (max-width: 720px) {
+    .dyn-sep { display: none; }
+    .transport { margin-left: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="plugin">
+
+  <!-- ── Title bar ── -->
+  <div class="titlebar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 30 30" fill="none">
+        <rect x="0.5" y="0.5" width="29" height="29" rx="7" fill="#15171c" stroke="#363a42"/>
+        <circle cx="15" cy="15" r="8.5" stroke="#2a2d34" stroke-width="2.6"/>
+        <path d="M15 15 L15 8" stroke="#d8dbe0" stroke-width="2" stroke-linecap="round"/>
+        <path d="M8.7 20 A8.5 8.5 0 0 1 15 6.5" class="arc" stroke="#5fb2d4" stroke-width="2.6" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <strong>COMP&nbsp;·&nbsp;EDU</strong>
+        <small>Dynamics Compressor</small>
+      </div>
+    </div>
+    <div class="titlebar-meta">
+      <span class="ui-label">UI</span>
+      <div class="swatches" id="swatches"></div>
+      <span class="chip">44.1 kHz</span>
+      <span class="chip accent">EDU BUILD</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <p class="tagline">샘플을 선택하고 파라미터를 조절하며 원본과 압축 신호의 차이를 비교해 보세요.</p>
+
+    <!-- ── 01 Source ── -->
+    <div class="card">
+      <div class="sec-head">
+        <span class="sec-num">01</span>
+        <span class="sec-title">Source</span>
+        <span class="sec-line"></span>
+      </div>
+      <div class="toolbar">
+        <div class="tb-group">
+          <div class="tb-label">Sample</div>
+          <div class="chips">
+            <button class="btn selected" data-sample="kick">Kick</button>
+            <button class="btn" data-sample="snare">Snare</button>
+            <button class="btn" data-sample="hihat">Hi-Hat</button>
+            <button class="btn" data-sample="tom">Tom</button>
+            <button class="btn" data-sample="clap">Clap</button>
+            <button class="btn" data-sample="bass">Bass</button>
+          </div>
+        </div>
+
+        <div class="tb-group">
+          <div class="tb-label">Repeat</div>
+          <div class="seg">
+            <button class="btn" data-rep="1">×1</button>
+            <button class="btn selected" data-rep="2">×2</button>
+            <button class="btn" data-rep="3">×3</button>
+            <button class="btn" data-rep="4">×4</button>
+          </div>
+        </div>
+
+        <div class="tb-group" style="min-width:190px;">
+          <div class="tb-label">Hit Spacing <span class="v" id="hitSpacingValue">200 ms</span> <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Hit Spacing · 히트 간격</strong>반복 재생 시 타격음 사이의 무음 길이(ms)입니다.</span></span></div>
+          <input id="hitSpacing" class="fx" type="range" min="0" max="800" value="200" step="20" />
+        </div>
+
+        <div class="transport">
+          <button id="playOrigBtn" class="btn" title="원본(무처리) 재생">▶ 원본</button>
+          <button id="playBtn" class="btn">▶ 컴프</button>
+          <button id="stopBtn" class="btn">■ Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 02 Dynamics ── -->
+    <div class="card">
+      <div class="sec-head">
+        <span class="sec-num">02</span>
+        <span class="sec-title">Dynamics</span>
+        <span class="sec-line"></span>
+      </div>
+      <div class="dyn-grid">
+        <div class="knob-bank">
+          <div class="param">
+            <div class="param-label">Threshold <span class="help tl" tabindex="0" role="note">?<span class="tip"><strong>Threshold · 임계점</strong>이 레벨(dB)을 넘는 신호에만 압축이 시작됩니다. 낮출수록 더 넓은 구간이 눌려요.</span></span></div>
+            <div class="knob" data-for="threshold" data-default="-24"></div>
+            <input id="threshold" class="knob-input" type="range" min="-60" max="0" value="-24" step="1" />
+            <div class="param-val" id="thresholdValue">-24 dB</div>
+          </div>
+          <div class="param">
+            <div class="param-label">Ratio <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Ratio · 압축비</strong>임계점을 넘은 양을 얼마나 누를지. 4:1이면 초과분 4dB가 1dB로 줄어듭니다.</span></span></div>
+            <div class="knob" data-for="ratio" data-default="4"></div>
+            <input id="ratio" class="knob-input" type="range" min="1" max="20" value="4" step="0.5" />
+            <div class="param-val" id="ratioValue">4.0:1</div>
+          </div>
+          <div class="param">
+            <div class="param-label">Knee <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Knee · 니</strong>임계점 근처에서 압축이 시작되는 부드러움. 클수록 완만(소프트 니), 0이면 급격(하드 니)합니다.</span></span></div>
+            <div class="knob" data-for="knee" data-default="6"></div>
+            <input id="knee" class="knob-input" type="range" min="0" max="24" value="6" step="1" />
+            <div class="param-val" id="kneeValue">6 dB</div>
+          </div>
+          <div class="param">
+            <div class="param-label">Attack <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Attack · 어택</strong>임계점을 넘은 뒤 최대 압축까지 도달하는 시간. 짧으면 트랜지언트를 잡고, 길면 펀치를 살립니다.</span></span></div>
+            <div class="knob" data-for="attack" data-default="5"></div>
+            <input id="attack" class="knob-input" type="range" min="0.1" max="100" value="5" step="0.1" />
+            <div class="param-val" id="attackValue">5.0 ms</div>
+          </div>
+          <div class="param">
+            <div class="param-label">Hold <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Hold · 홀드</strong>압축이 풀리기(릴리즈) 전에 현재 게인 리덕션을 유지하는 시간. 빠른 연타에서 펌핑을 줄여줍니다.</span></span></div>
+            <div class="knob" data-for="hold" data-default="20"></div>
+            <input id="hold" class="knob-input" type="range" min="0" max="200" value="20" step="1" />
+            <div class="param-val" id="holdValue">20 ms</div>
+          </div>
+          <div class="param">
+            <div class="param-label">Release <span class="help tr" tabindex="0" role="note">?<span class="tip"><strong>Release · 릴리즈</strong>신호가 임계점 아래로 내려간 뒤 압축이 0으로 돌아오기까지 걸리는 시간입니다.</span></span></div>
+            <div class="knob" data-for="release" data-default="80"></div>
+            <input id="release" class="knob-input" type="range" min="10" max="500" value="80" step="1" />
+            <div class="param-val" id="releaseValue">80 ms</div>
+          </div>
+        </div>
+
+        <div class="dyn-sep"></div>
+
+        <div class="gain-col">
+          <div class="fader">
+            <div class="fader-head">
+              <span class="lbl">Source Gain <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Source Gain · 입력 게인</strong>컴프레서에 들어가기 전 입력 레벨을 조절합니다. 올리면 임계점을 더 자주 넘어요.</span></span></span>
+              <span class="val-mono" id="sourceGainValue">0 dB</span>
+            </div>
+            <input id="sourceGain" class="fx" type="range" min="-24" max="24" value="0" step="1" />
+          </div>
+          <div class="fader">
+            <div class="fader-head">
+              <span class="lbl">Makeup Gain <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Makeup Gain · 메이크업</strong>압축으로 줄어든 음량을 보상해 다시 키웁니다. AUTO는 최대 게인 리덕션만큼 자동 보정합니다.</span></span></span>
+              <span class="right">
+                <button id="autoMakeupBtn" class="btn">AUTO</button>
+                <span class="val-mono" id="makeupGainValue">+0 dB</span>
+              </span>
+            </div>
+            <input id="makeupGain" class="fx" type="range" min="0" max="24" value="0" step="0.5" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 03 Analysis ── -->
+    <div class="viz-row">
+      <div class="card">
+        <div class="sec-head">
+          <span class="sec-num">03</span>
+          <span class="sec-title">Waveform &amp; Dynamics</span>
+          <span class="sec-line"></span>
+          <div class="seg" style="margin-left:4px;">
+            <button class="btn" data-listen="original">원본</button>
+            <button class="btn" data-listen="compressed">컴프</button>
+            <button class="btn selected" data-listen="makeup">+ Makeup</button>
+          </div>
+        </div>
+        <div class="canvas-well">
+          <canvas id="waveformCanvas" width="880" height="500"></canvas>
+        </div>
+        <div class="legend-row">
+          <span style="color:var(--text-2);">▬ 원본</span>
+          <span class="sep">/</span>
+          <span id="processedLegend" style="color:var(--accent);">▬ 컴프레스</span>
+          <span class="sep">/</span>
+          <span style="color:var(--amber);">▬ Threshold</span>
+          <span class="sep">/</span>
+          <span style="color:var(--amber);">▮ Attack</span>
+          <span style="color:var(--accent);">▮ Hold</span>
+          <span style="color:var(--sage);">▮ Release</span>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="card">
+          <div class="sec-head">
+            <span class="sec-num">04</span>
+            <span class="sec-title">Transfer Curve</span>
+            <span class="sec-line"></span>
+            <label class="curve-toggle"><input type="checkbox" id="curveMakeup" /> Makeup 반영</label>
+          </div>
+          <div class="canvas-well">
+            <canvas id="compressorCanvas" width="400" height="300"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec-head">
+            <span class="sec-num">05</span>
+            <span class="sec-title">Level Meters · dBFS</span>
+            <span class="sec-line"></span>
+          </div>
+          <div class="meters">
+            <div class="meter">
+              <span class="meter-label">Input</span>
+              <div class="meter-track"><div id="inputMeterFill"></div></div>
+              <div class="meter-val" id="inputMeterLabel">-∞</div>
+            </div>
+            <div class="meter">
+              <span class="meter-label">GR</span>
+              <div class="meter-track"><div id="grMeterFill"></div></div>
+              <div class="meter-val" id="grMeterLabel">0.0</div>
+            </div>
+            <div class="meter">
+              <span class="meter-label">Output</span>
+              <div class="meter-track"><div id="outputMeterFill"></div></div>
+              <div class="meter-val" id="outputMeterLabel">-∞</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  window.showCurveMakeup = false;
+  window.PALETTES = {
+    steel:   { name: 'Steel',   accent: '#5fb2d4', dim: '#3f88a6' },
+    amber:   { name: 'Amber',   accent: '#d6a24c', dim: '#a87a2e' },
+    emerald: { name: 'Emerald', accent: '#6fb98a', dim: '#46896a' },
+    violet:  { name: 'Violet',  accent: '#9b8cd8', dim: '#6f63a8' },
+    rose:    { name: 'Rose',    accent: '#cf7da0', dim: '#a4587b' },
+    mono:    { name: 'Mono',    accent: '#b8c0cc', dim: '#7d8694' }
+  };
+  (function () {
+    var key = 'steel';
+    try { key = localStorage.getItem('comp_accent') || 'steel'; } catch (e) {}
+    var p = window.PALETTES[key] || window.PALETTES.steel;
+    window.THEME = { accent: p.accent, key: key };
+    document.documentElement.style.setProperty('--accent', p.accent);
+    document.documentElement.style.setProperty('--accent-dim', p.dim);
+  })();
+</script>
+<script src="app.js"></script>
+<script src="knobs.js"></script>
+<script src="theme.js"></script>
+<script>
+  (function () {
+    var cb = document.getElementById('curveMakeup');
+    if (!cb) return;
+    cb.checked = !!window.showCurveMakeup;
+    cb.addEventListener('change', function () {
+      window.showCurveMakeup = cb.checked;
+      if (typeof drawCompressorGraph === 'function') drawCompressorGraph();
+    });
+  })();
+</script>
+</body>
+</html>
