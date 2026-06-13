@@ -76,6 +76,8 @@ let autoMakeupEnabled = false;
 
 const meterState = { inputDb: -60, outputDb: -60, grDb: 0 };
 
+const grPeak  = { db: 0 }; // GR peak hold
+
 let state = {
   original:         new Float32Array(0),
   compressedNoMkup: new Float32Array(0),
@@ -235,6 +237,12 @@ function getSlotLen() {
   return Math.floor(SAMPLE_RATE * HIT_DURATION) + Math.floor(SAMPLE_RATE * hitSpacingMs / 1000);
 }
 
+// Fixed reference length (max 800ms spacing) so the X axis stays stable as spacing changes
+function getFixedTotalLen() {
+  const fixedSlotLen = Math.floor(SAMPLE_RATE * HIT_DURATION) + Math.floor(SAMPLE_RATE * 800 / 1000);
+  return fixedSlotLen * repeatCount;
+}
+
 function buildRawBuffer(key) {
   const cacheKey = `${key}_${repeatCount}_${hitSpacingMs}`;
   if (!multiHitCache[cacheKey]) {
@@ -252,23 +260,38 @@ function buildRawBuffer(key) {
    Compressor
    ================================================ */
 function computeCompressor(input, params) {
-  const { threshold: thr, knee, ratio, attack, release, hold } = params;
+  const { threshold: thr, knee, ratio, attack, release, hold, autoRelease } = params;
   const bl = input.length;
-  const output       = new Float32Array(bl);
+  const output        = new Float32Array(bl);
   const gainReduction = new Float32Array(bl);
-  const stage        = new Uint8Array(bl);
+  const stage         = new Uint8Array(bl);
 
   const attackCoeff  = Math.exp(-1 / (SAMPLE_RATE * (attack  / 1000)));
   const releaseCoeff = Math.exp(-1 / (SAMPLE_RATE * (release / 1000)));
   const holdSamples  = Math.round((hold / 1000) * SAMPLE_RATE);
 
-  let curGrDb = 0;
-  let holdCnt = 0;
-  let maxGr   = 0;
+  // RMS-style sidechain detector. Real compressors don't react to the raw waveform's
+  // zero-crossings — their detector averages the signal level (power) over a short
+  // window, so the gain reduction follows the ENVELOPE. Without this, a fast attack
+  // on a low-frequency tone produces an unrealistic per-cycle staircase in the GR.
+  const DETECTOR_MS = 10;
+  const detCoeff = Math.exp(-1 / (SAMPLE_RATE * (DETECTOR_MS / 1000)));
+  let detSq = 0;
+
+  // Auto-release: fast (8% of release ms) blends to slow (3.5× release ms) as compression sustains
+  const fastRelCoeff  = autoRelease ? Math.exp(-1 / (SAMPLE_RATE * (release * 0.08 / 1000))) : releaseCoeff;
+  const slowRelCoeff  = autoRelease ? Math.exp(-1 / (SAMPLE_RATE * (release * 3.5  / 1000))) : releaseCoeff;
+  const sustainThresh = Math.round(SAMPLE_RATE * 0.06); // 60ms of compression → fully slow release
+
+  let curGrDb    = 0;
+  let holdCnt    = 0;
+  let maxGr      = 0;
+  let sustainCnt = 0; // counts samples under active compression (auto-release only)
 
   for (let i = 0; i < bl; i++) {
     const s = input[i];
-    const levelDb = linToDb(Math.abs(s));
+    detSq = detCoeff * detSq + (1 - detCoeff) * (s * s); // smoothed mean-square
+    const levelDb = linToDb(Math.sqrt(detSq));           // RMS detector level
     const over    = levelDb - thr;
 
     let targetGrDb = 0;
@@ -279,6 +302,14 @@ function computeCompressor(input, params) {
       targetGrDb = over * (1 - 1 / ratio);
     }
 
+    if (autoRelease) {
+      if (targetGrDb > 0.1) {
+        if (sustainCnt < sustainThresh * 10) sustainCnt++;
+      } else {
+        sustainCnt = Math.max(0, sustainCnt - 3);
+      }
+    }
+
     if (holdCnt > 0 && targetGrDb < curGrDb) {
       holdCnt--;
       stage[i] = 2; // hold
@@ -287,7 +318,13 @@ function computeCompressor(input, params) {
       curGrDb = attackCoeff * curGrDb + (1 - attackCoeff) * targetGrDb;
       stage[i] = 1; // attack
     } else {
-      curGrDb = releaseCoeff * curGrDb + (1 - releaseCoeff) * targetGrDb;
+      if (autoRelease) {
+        const blend = Math.min(1, sustainCnt / sustainThresh);
+        const adaptCoeff = fastRelCoeff + (slowRelCoeff - fastRelCoeff) * blend;
+        curGrDb = adaptCoeff * curGrDb + (1 - adaptCoeff) * targetGrDb;
+      } else {
+        curGrDb = releaseCoeff * curGrDb + (1 - releaseCoeff) * targetGrDb;
+      }
       stage[i] = curGrDb > 0.1 ? 3 : 0; // release or idle
     }
 
@@ -316,14 +353,15 @@ const WF = {
   // total canvas height ≈ 500
 };
 
-function drawFilledWaveform(ctx, buf, x0, midY, w, halfH, strokeCol, fillCol, scale) {
+function drawFilledWaveform(ctx, buf, x0, midY, w, halfH, strokeCol, fillCol, scale, totalSamples) {
   if (!buf || !buf.length) return;
   if (scale === undefined) scale = halfH * 0.91;
+  const T = totalSamples || buf.length;
 
   ctx.beginPath();
   ctx.moveTo(x0, midY);
   for (let x = 0; x <= w; x++) {
-    const idx = Math.min(buf.length - 1, Math.floor((x / w) * buf.length));
+    const idx = Math.min(buf.length - 1, Math.floor((x / w) * T));
     ctx.lineTo(x0 + x, midY - buf[idx] * scale);
   }
   ctx.lineTo(x0 + w, midY);
@@ -333,7 +371,7 @@ function drawFilledWaveform(ctx, buf, x0, midY, w, halfH, strokeCol, fillCol, sc
 
   ctx.beginPath();
   for (let x = 0; x <= w; x++) {
-    const idx = Math.min(buf.length - 1, Math.floor((x / w) * buf.length));
+    const idx = Math.min(buf.length - 1, Math.floor((x / w) * T));
     const y = midY - buf[idx] * scale;
     if (x === 0) ctx.moveTo(x0, y);
     else ctx.lineTo(x0 + x, y);
@@ -342,6 +380,8 @@ function drawFilledWaveform(ctx, buf, x0, midY, w, halfH, strokeCol, fillCol, sc
   ctx.lineWidth = 1.6;
   ctx.stroke();
 }
+
+let waveCache = null; // cached waveform bitmap so the moving playhead is cheap to overlay
 
 function drawWaveform() {
   const W = waveCanvas.width;
@@ -373,6 +413,7 @@ function drawWaveform() {
 
   const slotLen  = getSlotLen();
   const totalLen = state.original.length;
+  const fixedLen = getFixedTotalLen(); // stable X-axis reference regardless of spacing
 
   // ── clip everything to waveform section ──
   waveCtx.save();
@@ -406,13 +447,13 @@ function drawWaveform() {
   const col = { stroke: acc(), fill: acc(0.20) };
   if (listenMode === 'original') {
     drawFilledWaveform(waveCtx, state.original, 0, midY, W, halfH,
-      col.stroke, col.fill, scale);
+      col.stroke, col.fill, scale, fixedLen);
   } else {
     drawFilledWaveform(waveCtx, state.original, 0, midY, W, halfH,
-      'rgba(150,156,164,0.5)', 'rgba(120,126,134,0.12)', scale);
+      'rgba(150,156,164,0.5)', 'rgba(120,126,134,0.12)', scale, fixedLen);
     const frontBuf = listenMode === 'compressed' ? state.compressedNoMkup : state.compressedMakeup;
     drawFilledWaveform(waveCtx, frontBuf, 0, midY, W, halfH,
-      col.stroke, col.fill, scale);
+      col.stroke, col.fill, scale, fixedLen);
   }
 
   // ── Silence gap overlay in waveform section ──
@@ -421,8 +462,8 @@ function drawWaveform() {
     for (let r = 0; r < repeatCount - 1; r++) {
       const gapStart = r * slotLen + hitSamplesWf;
       const gapEnd   = (r + 1) * slotLen;
-      const gx1 = Math.round((gapStart / totalLen) * W);
-      const gx2 = Math.round((gapEnd   / totalLen) * W);
+      const gx1 = Math.round((gapStart / fixedLen) * W);
+      const gx2 = Math.round((gapEnd   / fixedLen) * W);
       if (gx2 <= gx1) continue;
       waveCtx.fillStyle = 'rgba(10,11,13,0.7)';
       waveCtx.fillRect(gx1, WF.waveTop, gx2 - gx1, WF.waveH);
@@ -469,7 +510,7 @@ function drawWaveform() {
   waveCtx.strokeStyle = '#3c4250';
   waveCtx.lineWidth = 1;
   for (let r = 0; r < repeatCount; r++) {
-    const sepX = Math.round((r * slotLen / totalLen) * W);
+    const sepX = Math.round((r * slotLen / fixedLen) * W);
     if (r > 0) {
       waveCtx.beginPath(); waveCtx.moveTo(sepX, WF.waveTop); waveCtx.lineTo(sepX, WF.waveTop + WF.waveH); waveCtx.stroke();
     }
@@ -486,7 +527,7 @@ function drawWaveform() {
   waveCtx.strokeStyle = '#2c313a';
   waveCtx.lineWidth = 1;
   for (let r = 1; r < repeatCount; r++) {
-    const sepX = Math.round((r * slotLen / totalLen) * W);
+    const sepX = Math.round((r * slotLen / fixedLen) * W);
     waveCtx.beginPath();
     waveCtx.moveTo(sepX, WF.grTop);
     waveCtx.lineTo(sepX, WF.stageTop + WF.stageH);
@@ -498,8 +539,9 @@ function drawWaveform() {
   const grBottom = WF.grTop + WF.grH - 14;
   const grDrawH  = WF.grH - 22;
 
-  // Dynamic scale: round actual max GR up to nearest 6dB (min 6dB)
-  const maxGrDisp = Math.max(6, Math.ceil(Math.max(1, state.maxReduction) / 6) * 6);
+  // Fixed GR axis (0 ~ -24 dB, same as the GR level meter) so the graph stays stable
+  // and doesn't rescale on every tweak. Only widens if GR genuinely exceeds 24 dB.
+  const maxGrDisp = Math.max(24, Math.ceil(state.maxReduction / 12) * 12);
 
   // Clip GR section so bars never bleed outside
   waveCtx.save();
@@ -543,8 +585,8 @@ function drawWaveform() {
   for (let r = 0; r < repeatCount - 1; r++) {
     const gapStart = r * slotLen + hitSamples;
     const gapEnd   = (r + 1) * slotLen;
-    const gx1 = Math.round((gapStart / totalLen) * W);
-    const gx2 = Math.round((gapEnd   / totalLen) * W);
+    const gx1 = Math.round((gapStart / fixedLen) * W);
+    const gx2 = Math.round((gapEnd   / fixedLen) * W);
     if (gx2 <= gx1) continue;
     waveCtx.fillStyle = 'rgba(255,255,255,0.06)';
     waveCtx.fillRect(gx1, WF.grTop, gx2 - gx1, WF.grH);
@@ -559,7 +601,7 @@ function drawWaveform() {
 
   // GR bars colored by stage
   for (let x = 0; x < W; x++) {
-    const i  = Math.min(totalLen - 1, Math.floor((x / W) * totalLen));
+    const i  = Math.min(totalLen - 1, Math.floor((x / W) * fixedLen));
     const gr = state.gainReduction[i];
     if (gr < 0.1) continue;
     const pct  = Math.min(gr / maxGrDisp, 1);
@@ -579,7 +621,7 @@ function drawWaveform() {
 
   // ----- Stage strip -----
   for (let x = 0; x < W; x++) {
-    const i   = Math.min(totalLen - 1, Math.floor((x / W) * totalLen));
+    const i   = Math.min(totalLen - 1, Math.floor((x / W) * fixedLen));
     const stg = state.stage[i];
     if (!stg) continue;
     waveCtx.fillStyle = stg === 1 ? 'rgba(202,162,79,0.85)' : stg === 2 ? acc(0.85) : 'rgba(130,171,134,0.85)';
@@ -621,6 +663,41 @@ function drawWaveform() {
     waveCtx.fillText(t, lx + 16, lY);
     lx += 80;
   });
+
+  // Cache the finished waveform so the playhead can be overlaid each frame without
+  // re-running this whole (heavy) draw.
+  if (!waveCache) {
+    waveCache = document.createElement('canvas');
+    waveCache.width  = waveCanvas.width;
+    waveCache.height = waveCanvas.height;
+  }
+  waveCache.getContext('2d').drawImage(waveCanvas, 0, 0);
+}
+
+/* Playhead overlay — vertical line on the time-axis graph that follows playback.
+   Pass a sample index to draw it, or null to just restore the clean waveform. */
+function drawPlayhead(curIdx) {
+  if (!waveCache) return;
+  waveCtx.drawImage(waveCache, 0, 0);            // restore clean waveform (clears old line)
+  if (curIdx == null) return;
+  const W = waveCanvas.width;
+  const x = (curIdx / getFixedTotalLen()) * W;
+  if (x < 0 || x > W) return;
+  const xp   = Math.round(x) + 0.5;
+  const yTop = WF.waveTop;
+  const yBot = WF.stageTop + WF.stageH;
+  waveCtx.save();
+  waveCtx.strokeStyle = acc(0.30);               // soft glow
+  waveCtx.lineWidth = 4;
+  waveCtx.beginPath(); waveCtx.moveTo(xp, yTop); waveCtx.lineTo(xp, yBot); waveCtx.stroke();
+  waveCtx.strokeStyle = acc(0.95);               // crisp line
+  waveCtx.lineWidth = 1.5;
+  waveCtx.beginPath(); waveCtx.moveTo(xp, yTop); waveCtx.lineTo(xp, yBot); waveCtx.stroke();
+  waveCtx.fillStyle = acc();                      // top marker
+  waveCtx.beginPath();
+  waveCtx.moveTo(xp - 4, yTop); waveCtx.lineTo(xp + 4, yTop); waveCtx.lineTo(xp, yTop + 6);
+  waveCtx.closePath(); waveCtx.fill();
+  waveCtx.restore();
 }
 
 /* ================================================
@@ -732,6 +809,7 @@ function drawCompressorGraph() {
   compCtx.fillText('Output (dB)', 0, 0);
   compCtx.restore();
   compCtx.textAlign = 'left';
+
 }
 
 /* ================================================
@@ -756,6 +834,15 @@ function updateMeters(tIn, tOut, tGr) {
   inputMeterFill.style.height  = `${Math.max(0, Math.min(100, inPct))}%`;
   outputMeterFill.style.height = `${Math.max(0, Math.min(100, outPct))}%`;
   grMeterFill.style.height     = `${Math.max(0, Math.min(100, grPct))}%`;
+
+  // GR peak hold
+  if (tGr > grPeak.db) {
+    grPeak.db = tGr;
+    const pkPct = Math.min(100, (grPeak.db / 24) * 100);
+    const line  = document.getElementById('grPeakLine');
+    if (line) { line.style.top = pkPct.toFixed(1) + '%'; line.style.display = 'block'; }
+  }
+
   inputMeterFill.style.backgroundColor  = col(meterState.inputDb);
   outputMeterFill.style.backgroundColor = col(meterState.outputDb);
 
@@ -772,6 +859,34 @@ function decayMeters() {
 }
 
 /* ================================================
+   AHR Timeline Diagram
+   ================================================ */
+function updateAHRDiagram() {
+  const aEl = document.getElementById('ahrAttackVal');
+  if (!aEl) return;
+  const hEl = document.getElementById('ahrHoldVal');
+  const rEl = document.getElementById('ahrReleaseVal');
+  const ap  = document.getElementById('ahrAttackPhase');
+  const hp  = document.getElementById('ahrHoldPhase');
+  const rp  = document.getElementById('ahrReleasePhase');
+  const attackMs  = parseFloat(controls.attack.value);
+  const holdMs    = parseFloat(controls.hold.value);
+  const releaseMs = parseFloat(controls.release.value);
+  aEl.textContent = fmtAttack(attackMs);
+  if (hEl) hEl.textContent = `${holdMs} ms`;
+  if (rEl) rEl.textContent = fmtRelease(releaseMs);
+  if (ap) {
+    // Log scale so μs attacks and second-long releases coexist visually
+    const aLog = Math.log10(Math.max(attackMs, 0.01) + 1);
+    const hLog = Math.log10(Math.max(holdMs, 0.5) + 1);
+    const rLog = Math.log10(Math.max(releaseMs, 1) + 1);
+    ap.style.flexGrow = aLog;
+    hp.style.flexGrow = hLog;
+    rp.style.flexGrow = rLog;
+  }
+}
+
+/* ================================================
    Render
    ================================================ */
 function render() {
@@ -779,29 +894,49 @@ function render() {
   const gainDb   = parseFloat(controls.sourceGain.value);
   const withGain = applyGain(rawBuf, gainDb);
 
-  const result = computeCompressor(withGain, {
-    threshold: parseFloat(controls.threshold.value),
-    ratio:     parseFloat(controls.ratio.value),
-    knee:      parseFloat(controls.knee.value),
-    attack:    parseFloat(controls.attack.value),
-    release:   parseFloat(controls.release.value),
-    hold:      parseFloat(controls.hold.value),
-  });
+  const compParams = {
+    threshold:   parseFloat(controls.threshold.value),
+    ratio:       parseFloat(controls.ratio.value),
+    knee:        parseFloat(controls.knee.value),
+    attack:      parseFloat(controls.attack.value),
+    release:     parseFloat(controls.release.value),
+    hold:        parseFloat(controls.hold.value),
+    autoRelease: window.autoReleaseEnabled,
+  };
+
+  // 1176 All-buttons: force minimum attack/release and maximum ratio
+  if (window.allButtonsMode) {
+    compParams.attack  = Math.min(compParams.attack, 0.020);
+    compParams.release = Math.min(compParams.release, 50);
+    compParams.ratio   = 20;
+  }
+
+  const result = computeCompressor(withGain, compParams);
+
+  // 1176 All-buttons: soft-saturation to simulate harmonic distortion
+  let finalOutput = result.output;
+  if (window.allButtonsMode) {
+    finalOutput = new Float32Array(result.output.length);
+    for (let i = 0; i < result.output.length; i++) {
+      const x = result.output[i] * 1.5;
+      finalOutput[i] = (x / (1 + Math.abs(x))) * 0.85;
+    }
+  }
 
   // Auto makeup: compensate for the maximum GR applied
   let makeupDb;
   if (autoMakeupEnabled) {
-    makeupDb = Math.min(24, result.maxReduction);
+    makeupDb = Math.min(40, result.maxReduction);
     controls.makeupGain.value    = makeupDb.toFixed(1);
     displays.makeupGain.textContent = `+${makeupDb.toFixed(1)} dB`;
   } else {
     makeupDb = parseFloat(controls.makeupGain.value);
   }
 
-  const withMakeup = makeupDb > 0 ? applyGain(result.output, makeupDb) : result.output;
+  const withMakeup = makeupDb > 0 ? applyGain(finalOutput, makeupDb) : finalOutput;
 
   state.original         = withGain;
-  state.compressedNoMkup = result.output;
+  state.compressedNoMkup = finalOutput;
   state.compressedMakeup = withMakeup;
   state.gainReduction    = result.gainReduction;
   state.stage            = result.stage;
@@ -810,13 +945,14 @@ function render() {
 
   // Decide what gets played (and metered as output)
   if      (listenMode === 'original')    state.processed = withGain;
-  else if (listenMode === 'compressed')  state.processed = result.output;
+  else if (listenMode === 'compressed')  state.processed = finalOutput;
   else                                   state.processed = withMakeup;
 
   state.outputPeakDb = getPeakDb(state.processed);
 
   drawWaveform();
   drawCompressorGraph();
+  updateAHRDiagram();
   if (typeof window.syncKnobs === 'function') window.syncKnobs();
 
   if (!isPlaying) {
@@ -853,6 +989,9 @@ function animatePlayback() {
     outPk > 0 ? linToDb(outPk) : -60,
     grMax
   );
+
+  drawPlayhead(curIdx);
+  drawCompressorGraph();
   animFrameId = requestAnimationFrame(animatePlayback);
 }
 
@@ -860,6 +999,9 @@ function playSample() {
   if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   if (audioCtx.state === 'suspended') audioCtx.resume();
   stopSample();
+  grPeak.db = 0;
+  const grPeakLine = document.getElementById('grPeakLine');
+  if (grPeakLine) grPeakLine.style.display = 'none';
 
   const buf = audioCtx.createBuffer(1, state.processed.length, SAMPLE_RATE);
   buf.copyToChannel(state.processed, 0, 0);
@@ -880,6 +1022,8 @@ function stopSample() {
   }
   isPlaying = false;
   if (animFrameId) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  drawPlayhead(null);
+  drawCompressorGraph();
   decayMeters();
 }
 
@@ -919,16 +1063,128 @@ function stopOriginal() {
 /* ================================================
    UI
    ================================================ */
-function updateDisplays() {
-  displays.threshold.textContent  = `${controls.threshold.value} dB`;
-  displays.sourceGain.textContent = `${controls.sourceGain.value} dB`;
-  displays.ratio.textContent      = `${parseFloat(controls.ratio.value).toFixed(1)}:1`;
-  displays.knee.textContent       = `${controls.knee.value} dB`;
-  displays.attack.textContent     = `${parseFloat(controls.attack.value).toFixed(1)} ms`;
-  displays.release.textContent    = `${controls.release.value} ms`;
-  displays.hold.textContent       = `${controls.hold.value} ms`;
-  displays.makeupGain.textContent = `+${controls.makeupGain.value} dB`;
+function fmtAttack(ms) {
+  const v = parseFloat(ms);
+  if (v < 1)    return `${Math.round(v * 1000)} μs`;
+  if (v < 10)   return `${v.toFixed(2)} ms`;
+  if (v < 100)  return `${v.toFixed(1)} ms`;
+  return `${v.toFixed(0)} ms`;
 }
+
+function fmtRelease(ms) {
+  const v = parseFloat(ms);
+  if (v >= 1000) return `${(v / 1000).toFixed(2)} s`;
+  return `${parseFloat(v).toFixed(0)} ms`;
+}
+
+function fmtRatio(val) {
+  const v = parseFloat(val);
+  if (v >= 100) return '∞:1';
+  return `${v.toFixed(1)}:1`;
+}
+
+/* Tracks which param-val input is currently being typed into */
+const editingParams = new Set();
+
+/* param-val inputs use .value; fader displays (sourceGain, makeupGain) use .textContent */
+function updateDisplays() {
+  if (!editingParams.has('threshold')) displays.threshold.value = `${controls.threshold.value} dB`;
+  if (!editingParams.has('ratio'))     displays.ratio.value     = fmtRatio(controls.ratio.value);
+  if (!editingParams.has('knee'))      displays.knee.value      = `${controls.knee.value} dB`;
+  if (!editingParams.has('attack'))    displays.attack.value    = fmtAttack(controls.attack.value);
+  if (!editingParams.has('release'))   displays.release.value   = fmtRelease(controls.release.value);
+  if (!editingParams.has('hold'))      displays.hold.value      = `${controls.hold.value} ms`;
+  displays.sourceGain.textContent = `${controls.sourceGain.value} dB`;
+  displays.makeupGain.textContent = `+${parseFloat(controls.makeupGain.value).toFixed(1)} dB`;
+}
+
+/* Parse a typed string into a raw numeric value for the given param (in native units) */
+function parseParamInput(param, text) {
+  text = text.trim();
+  const lower = text.toLowerCase().replace(/\s+/g, '');
+
+  switch (param) {
+    case 'threshold':
+    case 'knee': {
+      const v = parseFloat(text);
+      return isNaN(v) ? null : v;
+    }
+    case 'ratio': {
+      if (/[∞inf]/i.test(lower)) return 100;
+      // accept "4", "4:1", "4.5:1"
+      const v = parseFloat(text);
+      return isNaN(v) ? null : v;
+    }
+    case 'attack':
+    case 'release':
+    case 'hold': {
+      // μs / us / µs → convert to ms
+      if (/[μuµ]s/.test(lower)) {
+        const v = parseFloat(text);
+        return isNaN(v) ? null : v / 1000;
+      }
+      // seconds: "1.5s" or "1.5 s" but NOT "ms"
+      if (/\d\.?\d*s$/.test(lower) && !lower.endsWith('ms')) {
+        const v = parseFloat(text);
+        return isNaN(v) ? null : v * 1000;
+      }
+      // default: ms
+      const v = parseFloat(text);
+      return isNaN(v) ? null : v;
+    }
+    default:
+      return null;
+  }
+}
+
+/* Wire up direct-type editing for all param-val inputs */
+(function () {
+  const paramMap = {
+    threshold: controls.threshold,
+    ratio:     controls.ratio,
+    knee:      controls.knee,
+    attack:    controls.attack,
+    release:   controls.release,
+    hold:      controls.hold,
+  };
+
+  Object.entries(paramMap).forEach(([param, ctrl]) => {
+    const displayEl = displays[param];
+    if (!displayEl || displayEl.tagName !== 'INPUT') return;
+
+    displayEl.addEventListener('focus', () => {
+      editingParams.add(param);
+      displayEl.select();
+    });
+
+    displayEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); displayEl.blur(); return; }
+      if (e.key === 'Tab')   { displayEl.blur(); return; } // commit + natural tab movement
+      if (e.key === 'Escape') {
+        editingParams.delete(param);
+        updateDisplays(); // restore formatted value
+        displayEl.blur();
+        return;
+      }
+      // Prevent knob keyboard handler from firing
+      e.stopPropagation();
+    });
+
+    displayEl.addEventListener('blur', () => {
+      editingParams.delete(param);
+      const parsed = parseParamInput(param, displayEl.value);
+      if (parsed !== null) {
+        const min = parseFloat(ctrl.min);
+        const max = parseFloat(ctrl.max);
+        const clamped = Math.max(min, Math.min(max, parsed));
+        ctrl.value = String(clamped);
+      }
+      updateDisplays();
+      if (typeof window.syncKnobs === 'function') window.syncKnobs();
+      render();
+    });
+  });
+})();
 
 document.querySelectorAll('[data-sample]').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -984,8 +1240,47 @@ document.getElementById('autoMakeupBtn').addEventListener('click', () => {
   render();
 });
 
+// 1176 All-buttons mode toggle
+(function () {
+  var btn = document.getElementById('allBtnsBtn');
+  if (btn) btn.addEventListener('click', () => {
+    window.allButtonsMode = !window.allButtonsMode;
+    btn.classList.toggle('active', window.allButtonsMode);
+    render();
+  });
+})();
+
+// SSL-G / Neve Auto Release toggle
+(function () {
+  var btn = document.getElementById('autoRelBtn');
+  if (btn) btn.addEventListener('click', () => {
+    window.autoReleaseEnabled = !window.autoReleaseEnabled;
+    btn.classList.toggle('active', window.autoReleaseEnabled);
+    render();
+  });
+})();
+
 Object.values(controls).forEach(ctrl => {
   ctrl.addEventListener('input', () => { updateDisplays(); render(); });
+});
+
+/* GR peak hold reset */
+(function () {
+  var track = document.getElementById('grMeterTrack');
+  if (track) track.addEventListener('click', function () {
+    grPeak.db = 0;
+    var line = document.getElementById('grPeakLine');
+    if (line) line.style.display = 'none';
+  });
+})();
+
+/* Spacebar — play / stop toggle */
+document.addEventListener('keydown', function (e) {
+  if (e.key !== ' ') return;
+  var tag = (document.activeElement || {}).tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  e.preventDefault();
+  if (isPlaying) stopSample(); else playSample();
 });
 
 /* Init */

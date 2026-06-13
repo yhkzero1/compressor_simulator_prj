@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>교육용 컴프레서 시뮬레이터</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+
+  :root {
+    --face:#cdcac2; --face-hi:#dcd9d1; --face-lo:#b9b6ad;
+    --plate-hi:#d7d4cb; --plate:#c6c3ba;
+    --metal-edge:#a39f95; --metal-edge-d:#888579;
+    --groove:rgba(0,0,0,0.30); --groove-hi:rgba(255,255,255,0.62);
+    --ink:#2b2a25; --ink-2:#54524b; --ink-3:#777569;
+    --text:#2b2a25; --text-2:#54524b; --text-3:#777569;
+    --line:rgba(0,0,0,0.30); --line-2:#888579;
+    --screen:#0a0b0e; --bezel:#16181d;
+    --btn-face:#2c2f35; --btn-face-d:#202328;
+    --lcd-bg:#14130c; --lcd:#e6b052; --lcd-dim:#6f5526;
+    --accent:#4e93ad; --accent-dim:#336e85;
+    --amber:#9a6a1f; --sage:#4f7e58; --danger:#b14a39;
+    --ui:'Barlow Semi Condensed',system-ui,sans-serif;
+    --label:'Barlow Semi Condensed',system-ui,sans-serif;
+    --sans:'Barlow',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{
+    background:radial-gradient(135% 95% at 50% -8%,#35353b 0%,#222226 55%,#191a1d 100%);
+    color:var(--ink); font-family:var(--sans); min-height:100vh;
+    padding:40px 24px 64px; display:flex; justify-content:center;
+    -webkit-font-smoothing:antialiased;
+  }
+  .rack{ display:flex; align-items:stretch; width:100%; max-width:1352px;
+    filter:drop-shadow(0 48px 64px rgba(0,0,0,0.55)); }
+  .ear{ width:34px; flex:none; position:relative;
+    background:linear-gradient(90deg,#3b3c40,#27282c 42%,#2d2e32 58%,#3b3c40);
+    border:1px solid #131318; }
+  .ear-l{ border-radius:9px 0 0 9px; border-right:none; box-shadow:inset -3px 0 7px rgba(0,0,0,0.5); }
+  .ear-r{ border-radius:0 9px 9px 0; border-left:none; box-shadow:inset 3px 0 7px rgba(0,0,0,0.5); }
+  .ear::before,.ear::after{ content:''; position:absolute; left:50%; transform:translateX(-50%);
+    width:14px; height:14px; border-radius:50%;
+    background:radial-gradient(circle at 38% 32%,#73757b,#34363a 58%,#1a1b1f);
+    box-shadow:inset 0 1px 2px rgba(255,255,255,0.4),inset 0 -1px 2px rgba(0,0,0,0.65),0 1px 1px rgba(0,0,0,0.5); }
+  .ear::before{ top:18px; } .ear::after{ bottom:18px; }
+  .plugin{ flex:1; min-width:0; position:relative; overflow:hidden;
+    background:
+      repeating-linear-gradient(0deg,rgba(255,255,255,0.05) 0 1px,rgba(0,0,0,0.02) 1px 2px),
+      radial-gradient(125% 150% at 50% 0%,var(--face-hi),var(--face) 55%,var(--face-lo) 100%);
+    border-top:1px solid rgba(255,255,255,0.55); border-bottom:1px solid #8d8a81; }
+  .titlebar{ display:flex; align-items:center; justify-content:space-between; gap:16px;
+    padding:17px 26px; border-bottom:1px solid var(--groove); box-shadow:0 1px 0 var(--groove-hi); }
+  .brand{ display:flex; align-items:center; gap:13px; }
+  .power-led{ width:9px; height:9px; border-radius:50%;
+    background:radial-gradient(circle at 40% 35%,#bff0c6,#4fb86a 55%,#2f7a45);
+    box-shadow:0 0 7px rgba(95,200,120,0.85),inset 0 0 2px rgba(255,255,255,0.6); }
+  .brand .mark{ width:34px; height:34px; display:block; filter:drop-shadow(0 1px 0 rgba(255,255,255,0.5)); }
+  .brand-text{ display:flex; flex-direction:column; gap:3px; line-height:1; }
+  .brand-text strong{ font-family:var(--label); font-weight:700; font-size:19px; letter-spacing:0.14em;
+    color:var(--ink); text-shadow:0 1px 0 rgba(255,255,255,0.55); white-space:nowrap; }
+  .brand-text small{ font-family:var(--label); font-weight:600; font-size:10.5px; letter-spacing:0.3em;
+    text-transform:uppercase; color:var(--ink-2); text-shadow:0 1px 0 rgba(255,255,255,0.45); white-space:nowrap; }
+  .titlebar-meta{ display:flex; align-items:center; gap:11px; }
+  .spec-tag{ font-family:var(--mono); font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
+    color:var(--ink-2); padding:5px 11px; border-radius:4px;
+    background:linear-gradient(180deg,#bdbab1,#c9c6bd); border:1px solid var(--metal-edge);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.5); text-shadow:0 1px 0 rgba(255,255,255,0.4); }
+  .manual-btn{ font-family:var(--label); font-weight:600; font-size:12px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--ink); cursor:pointer; padding:7px 14px; border-radius:5px;
+    background:linear-gradient(180deg,#e1ded5,#c6c3ba); border:1px solid var(--metal-edge);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.7),0 1px 2px rgba(0,0,0,0.22);
+    text-shadow:0 1px 0 rgba(255,255,255,0.5); transition:filter .12s,box-shadow .12s; white-space:nowrap; }
+  .manual-btn:hover{ filter:brightness(1.05); }
+  .manual-btn:active{ box-shadow:inset 0 1px 3px rgba(0,0,0,0.35); }
+  .body{ padding:22px 26px 28px; display:flex; flex-direction:column; gap:18px; }
+  .tagline{ font-family:var(--sans); font-size:13px; color:var(--ink-2); margin:-2px 2px 0; }
+  .card{
+    background:
+      repeating-linear-gradient(0deg,rgba(255,255,255,0.045) 0 1px,rgba(0,0,0,0.016) 1px 2px),
+      linear-gradient(180deg,var(--plate-hi),var(--plate));
+    border:1px solid var(--metal-edge); border-radius:7px; padding:18px 20px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.55),0 1px 2px rgba(0,0,0,0.16),0 8px 20px -14px rgba(0,0,0,0.45); }
+  .sec-head{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .sec-num{ font-family:var(--mono); font-size:11.5px; font-weight:600; color:var(--ink-3);
+    letter-spacing:0.04em; text-shadow:0 1px 0 rgba(255,255,255,0.4); }
+  .sec-title{ font-family:var(--label); font-weight:700; font-size:14px; letter-spacing:0.2em;
+    text-transform:uppercase; color:var(--ink); text-shadow:0 1px 0 rgba(255,255,255,0.5); white-space:nowrap; }
+  .sec-line{ flex:1; height:2px; border-radius:2px;
+    background:linear-gradient(180deg,var(--groove),transparent 55%); box-shadow:0 1px 0 var(--groove-hi); }
+  .btn{ font-family:var(--label); font-weight:600; font-size:13px; letter-spacing:0.05em;
+    text-transform:uppercase; color:#c5c2b9; cursor:pointer; white-space:nowrap;
+    background:linear-gradient(180deg,var(--btn-face),var(--btn-face-d));
+    border:1px solid #111316; border-top-color:#3c3f45; border-radius:4px; padding:7px 13px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 1px 0 rgba(255,255,255,0.45); transition:filter .1s,color .1s; }
+  .btn:hover{ color:#eceae2; filter:brightness(1.13); }
+  .btn.selected{ color:#0e1418;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 86%,#fff),var(--accent));
+    border-color:var(--accent-dim);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.4),0 0 10px color-mix(in srgb,var(--accent) 55%,transparent),0 1px 0 rgba(255,255,255,0.45); text-shadow:none; }
+  .seg{ display:inline-flex; border:1px solid #111316; border-radius:5px; overflow:hidden;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.55),0 1px 0 rgba(255,255,255,0.45); }
+  .seg .btn{ border:none; border-radius:0; padding:7px 10px; font-size:12px; letter-spacing:0.03em;
+    background:linear-gradient(180deg,#2a2d33,#1e2126); box-shadow:none; }
+  .seg .btn+.btn{ border-left:1px solid #111316; }
+  .seg .btn:hover{ filter:brightness(1.13); }
+  .seg .btn.selected{ color:#0e1418;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 80%,#fff),var(--accent));
+    box-shadow:inset 0 0 8px color-mix(in srgb,var(--accent) 45%,transparent); }
+  .toolbar{ display:flex; align-items:flex-end; gap:26px; flex-wrap:wrap; }
+  .tb-group{ display:flex; flex-direction:column; gap:9px; }
+  .tb-label{ font-family:var(--label); font-weight:600; font-size:12px; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--ink-2); display:flex; align-items:baseline; gap:8px;
+    text-shadow:0 1px 0 rgba(255,255,255,0.4); }
+  .tb-label .v{ font-family:var(--mono); font-size:11px; letter-spacing:0; text-transform:none;
+    color:var(--lcd); background:var(--lcd-bg); padding:1px 6px; border-radius:3px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,0.6); text-shadow:0 0 4px rgba(230,176,82,0.4); }
+  .chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .transport{ display:flex; gap:8px; margin-left:auto; }
+  #playOrigBtn.btn{ color:#cfccc3; }
+  #playBtn.btn{ color:#7fe09a; }
+  #playBtn.btn:hover{ color:#a6f0ba; filter:brightness(1.15); }
+  #stopBtn.btn{ color:#e2897a; }
+  #stopBtn.btn:hover{ color:#f0a698; filter:brightness(1.1); }
+  .knob-row{ display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+  .dyn-grid{ display:flex; gap:24px; flex-wrap:wrap; align-items:stretch; }
+  .knob-bank{ display:flex; gap:12px; flex-wrap:wrap; }
+  .param{ display:flex; flex-direction:column; align-items:center; gap:8px; width:96px; }
+  .param-label{ font-family:var(--label); font-weight:600; font-size:12px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--ink); text-shadow:0 1px 0 rgba(255,255,255,0.5); }
+  .knob-input{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden;
+    clip:rect(0 0 0 0); white-space:nowrap; border:0; opacity:0; pointer-events:none; }
+  .knob{ width:80px; height:80px; cursor:ns-resize; outline:none; touch-action:none;
+    user-select:none; -webkit-user-select:none; border-radius:50%; }
+  .knob-svg{ width:100%; height:100%; display:block; overflow:visible; }
+  .kb-ticks line.kb-tick{ stroke:rgba(0,0,0,0.42); stroke-width:1.4; stroke-linecap:round; }
+  .kb-ticks line.kb-tick-major{ stroke:rgba(0,0,0,0.62); stroke-width:2; }
+  .kb-track{ fill:none; stroke:rgba(0,0,0,0.3); stroke-width:3.4; stroke-linecap:round; stroke-dasharray:141.37 188.5; }
+  .kb-arc{ fill:none; stroke:var(--accent); stroke-width:3.4; stroke-linecap:round;
+    filter:drop-shadow(0 0 2px color-mix(in srgb,var(--accent) 60%,transparent)); transition:stroke-dasharray .06s ease; }
+  .kb-skirt{ fill:url(#knobSkirt); stroke:#141519; stroke-width:1; filter:drop-shadow(0 3px 4px rgba(0,0,0,0.38)); }
+  .kb-cap{ fill:url(#knobCap); stroke:#0d0e11; stroke-width:0.8; }
+  .kb-gloss{ fill:url(#knobGloss); pointer-events:none; }
+  .kb-ptr{ stroke:#ece9de; stroke-width:2.6; stroke-linecap:round; filter:drop-shadow(0 0 1px rgba(0,0,0,0.55)); transition:stroke .12s; }
+  .knob:hover .kb-ptr,.knob.dragging .kb-ptr{ stroke:#fff; }
+  .knob:focus-visible{ box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 50%,transparent); }
+  .knob.is-disabled{ opacity:.4; pointer-events:none; }
+  .param-val{ font-family:var(--mono); font-size:13px; font-weight:500; letter-spacing:-0.01em;
+    color:var(--lcd); background:var(--lcd-bg); border:1px solid #000; border-radius:4px;
+    padding:4px 8px; width:80px; text-align:center; -webkit-appearance:none; appearance:none; cursor:text;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.7),0 1px 0 rgba(255,255,255,0.4); text-shadow:0 0 5px rgba(230,176,82,0.45); }
+  .param-val:focus{ outline:none; color:#ffd27a;
+    box-shadow:inset 0 1px 3px rgba(0,0,0,0.7),0 0 0 2px var(--accent-dim); }
+  .param-val::selection{ background:var(--lcd-dim); color:#000; }
+  .range-bar-wrap{ display:flex; flex-direction:column; align-items:center; gap:3px; width:80px; }
+  .range-bar{ position:relative; width:100%; height:5px; background:#15171b; border:1px solid #000;
+    border-radius:3px; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,0.6); }
+  .range-fill{ position:absolute; top:0; height:100%; border-radius:2px; opacity:0.92;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 85%,#fff),var(--accent)); transition:left .25s,width .25s; }
+  .range-lbl{ font-family:var(--mono); font-size:9.5px; color:var(--ink-3); text-align:center;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
+  .dyn-sep{ width:2px; align-self:stretch;
+    background:linear-gradient(90deg,var(--groove),transparent 55%); box-shadow:1px 0 0 var(--groove-hi); }
+  .gain-col{ display:flex; flex-direction:column; gap:22px; min-width:240px; max-width:470px; flex:1; justify-content:center; }
+  .fader{ display:flex; flex-direction:column; gap:10px; }
+  .fader-head{ display:flex; justify-content:space-between; align-items:center; }
+  .fader-head .lbl{ font-family:var(--label); font-weight:600; font-size:12px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--ink); white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,0.5); }
+  .fader-head .right{ display:flex; align-items:center; gap:10px; }
+  input[type=range].fx{ -webkit-appearance:none; appearance:none; width:100%; height:22px; background:transparent; cursor:pointer; }
+  input[type=range].fx::-webkit-slider-runnable-track{ height:6px; background:#15171b; border:1px solid #000;
+    border-radius:4px; box-shadow:inset 0 1px 3px rgba(0,0,0,0.7); }
+  input[type=range].fx::-webkit-slider-thumb{ -webkit-appearance:none; appearance:none; width:16px; height:24px;
+    margin-top:-10px; border-radius:3px; border:1px solid #14151a;
+    background:linear-gradient(180deg,transparent 44%,rgba(0,0,0,0.5) 44% 56%,transparent 56%),linear-gradient(180deg,#6c6f76,#34373c);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.4),0 2px 3px rgba(0,0,0,0.5); }
+  input[type=range].fx:hover::-webkit-slider-thumb{ filter:brightness(1.08); }
+  input[type=range].fx::-moz-range-track{ height:6px; background:#15171b; border:1px solid #000; border-radius:4px; }
+  input[type=range].fx::-moz-range-thumb{ width:16px; height:24px; border-radius:3px; border:1px solid #14151a;
+    background:linear-gradient(180deg,#6c6f76,#34373c); }
+  input[type=range].fx:disabled{ opacity:.4; }
+  #autoMakeupBtn{ font-size:11px; padding:4px 10px; letter-spacing:0.08em; border-radius:4px; }
+  #autoMakeupBtn.active{ color:#15120a;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--lcd) 85%,#fff),var(--lcd)); border-color:#8a6a2a;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.4),0 0 9px rgba(230,176,82,0.55); }
+  .val-mono{ font-family:var(--mono); font-size:13px; font-weight:500; color:var(--lcd); background:var(--lcd-bg);
+    border:1px solid #000; padding:3px 8px; border-radius:4px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,0.6); text-shadow:0 0 5px rgba(230,176,82,0.4); }
+  .viz-row{ display:grid; grid-template-columns:minmax(0,1fr) 392px; gap:18px; }
+  .right-col{ display:flex; flex-direction:column; gap:18px; }
+  .canvas-well{ position:relative; background:#08090c; border:1px solid #000; border-radius:5px; padding:8px;
+    box-shadow:inset 0 0 0 1px #2b2f36,inset 0 2px 16px rgba(0,0,0,0.85),0 1px 0 rgba(255,255,255,0.4); }
+  .canvas-well::after{ content:''; position:absolute; inset:8px; border-radius:3px; pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,0.045),transparent 26%); }
+  canvas{ display:block; width:100%; height:auto; border-radius:3px; }
+  .legend-row{ font-family:var(--sans); font-size:12px; color:var(--ink-2); margin-top:12px;
+    text-align:center; line-height:1.7; }
+  .legend-row .sep{ color:var(--metal-edge-d); margin:0 6px; }
+  .meters{ display:flex; justify-content:space-around; align-items:flex-end; gap:14px; padding-top:2px; }
+  .meter{ display:flex; flex-direction:column; align-items:center; gap:10px; }
+  .meter-label{ font-family:var(--label); font-size:12px; font-weight:600; letter-spacing:0.12em;
+    text-transform:uppercase; color:var(--ink); text-shadow:0 1px 0 rgba(255,255,255,0.5); }
+  .meter-track{ width:26px; height:196px; background:#0a0b0e; border:1px solid #000; border-radius:3px;
+    overflow:hidden; position:relative; display:flex; box-shadow:inset 0 1px 3px rgba(0,0,0,0.8);
+    background-image:repeating-linear-gradient(0deg,transparent,transparent 23px,rgba(255,255,255,0.04) 24px); }
+  .meter-track::after{ content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(90deg,rgba(255,255,255,0.07),transparent 42%); }
+  #inputMeterFill,#outputMeterFill{ align-self:flex-end; width:100%; transition:height .05s linear; }
+  #grMeterFill{ align-self:flex-start; width:100%;
+    background:linear-gradient(180deg,var(--accent),var(--accent-dim)); transition:height .05s linear; }
+  .meter-val{ font-family:var(--mono); font-size:12px; font-weight:500; color:var(--lcd); background:var(--lcd-bg);
+    border:1px solid #000; padding:3px 6px; border-radius:4px; width:76px; text-align:center;
+    white-space:nowrap; overflow:hidden;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,0.6); text-shadow:0 0 4px rgba(230,176,82,0.4); }
+  .meter-track-wrap{ display:flex; flex-direction:row; align-items:flex-start; gap:4px; }
+  .meter-scale{ position:relative; height:196px; }
+  .meter-tick{ position:absolute; left:0; display:flex; align-items:center; gap:2px; transform:translateY(-50%); white-space:nowrap; }
+  .meter-tick::before{ content:''; width:4px; height:1px; background:var(--metal-edge-d); flex-shrink:0; }
+  .meter-tick-lbl{ font-family:var(--mono); font-size:9.5px; color:var(--ink-3); line-height:1; }
+  .help{ display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%;
+    vertical-align:middle; border:1px solid var(--metal-edge-d); color:var(--ink-3); font-family:var(--mono);
+    font-size:9px; font-weight:600; line-height:1; cursor:help; position:relative; flex:none; margin-left:5px; letter-spacing:0;
+    background:linear-gradient(180deg,#d5d2c9,#c0bdb4); box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);
+    transition:color .12s,border-color .12s; }
+  .help:hover,.help:focus-visible{ color:var(--accent-dim); border-color:var(--accent-dim); outline:none; }
+  .help .tip{ position:absolute; bottom:calc(100% + 9px); left:50%; transform:translateX(-50%) translateY(4px);
+    width:210px; background:#16181d; border:1px solid #000; border-radius:7px; padding:11px 13px;
+    font-family:var(--sans); font-size:11.5px; font-weight:400; line-height:1.55; color:#c7c4bb; letter-spacing:0;
+    text-transform:none; text-align:left; box-shadow:0 16px 36px -10px rgba(0,0,0,0.7); opacity:0; visibility:hidden;
+    transition:opacity .13s,transform .13s; z-index:40; pointer-events:none; }
+  .help .tip strong{ display:block; color:#fff; font-family:var(--label); font-weight:700; font-size:12px;
+    letter-spacing:0.04em; margin-bottom:4px; }
+  .help:hover .tip,.help:focus-visible .tip{ opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
+  .help .tip::after{ content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%);
+    border:6px solid transparent; border-top-color:#16181d; }
+  .help.tl .tip{ left:-3px; transform:translateY(4px); }
+  .help.tl:hover .tip,.help.tl:focus-visible .tip{ transform:translateY(0); }
+  .help.tl .tip::after{ left:9px; }
+  .help.tr .tip{ left:auto; right:-3px; transform:translateY(4px); }
+  .help.tr:hover .tip,.help.tr:focus-visible .tip{ transform:translateY(0); }
+  .help.tr .tip::after{ left:auto; right:9px; }
+  .curve-toggle{ display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-family:var(--mono);
+    font-size:10.5px; letter-spacing:0.02em; color:var(--ink-2); text-transform:none; user-select:none; -webkit-user-select:none; }
+  .curve-toggle input{ accent-color:var(--accent); width:14px; height:14px; cursor:pointer; margin:0; }
+  .curve-toggle:hover{ color:var(--ink); }
+  .preset-row{ display:flex; gap:7px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+  .preset-btn{ font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:0.06em; color:#c5c2b9;
+    cursor:pointer; white-space:nowrap; background:linear-gradient(180deg,var(--btn-face),var(--btn-face-d));
+    border:1px solid #111316; border-top-color:#3c3f45; border-radius:4px; padding:7px 13px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.08),0 1px 0 rgba(255,255,255,0.45); transition:filter .1s,color .1s; }
+  .preset-btn:hover{ color:#eceae2; filter:brightness(1.13); }
+  .preset-btn.selected{ color:#11130c; font-weight:700;
+    background:linear-gradient(180deg,color-mix(in srgb,var(--preset-color,var(--accent)) 88%,#fff),var(--preset-color,var(--accent)));
+    border-color:color-mix(in srgb,var(--preset-color,var(--accent)) 55%,#000);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.4),0 0 10px color-mix(in srgb,var(--preset-color,var(--accent)) 50%,transparent),0 1px 0 rgba(255,255,255,0.45); }
+  #modelInfo{ margin-top:2px; }
+  .model-desc{ font-family:var(--sans); font-size:12.5px; color:var(--ink); line-height:1.6; padding:11px 15px;
+    background:linear-gradient(180deg,#d6d3ca,#c8c5bc); border:1px solid var(--metal-edge); border-radius:6px;
+    margin-bottom:12px; box-shadow:inset 0 1px 0 rgba(255,255,255,0.5); }
+  .model-cols{ display:flex; gap:20px; flex-wrap:wrap; }
+  .spec-table{ border-collapse:collapse; font-size:12px; }
+  .spec-table td{ padding:3px 10px 3px 0; vertical-align:top; }
+  .spec-key{ font-family:var(--label); font-weight:600; color:var(--ink-2); white-space:nowrap; padding-right:12px; letter-spacing:0.03em; }
+  .spec-val{ color:var(--ink); font-family:var(--mono); font-size:11px; }
+  .model-notes{ list-style:none; padding:0; display:flex; flex-direction:column; gap:5px; font-size:12px;
+    color:var(--ink-2); line-height:1.55; max-width:460px; }
+  .model-notes li::before{ content:'·  '; color:var(--accent-dim); }
+  .compare-toggle-row{ display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .compare-body{ display:block; }
+  .cmp-wrapper{ display:flex; flex-direction:column; gap:24px; }
+  .cmp-section-title{ font-family:var(--label); font-weight:700; font-size:11px; letter-spacing:0.16em;
+    text-transform:uppercase; color:var(--ink); text-shadow:0 1px 0 rgba(255,255,255,0.5); margin-bottom:10px; }
+  .cmp-scroll{ overflow-x:auto; }
+  .cmp-table{ border-collapse:collapse; font-size:11px; width:100%; min-width:700px; }
+  .cmp-table thead tr{ border-bottom:1px solid var(--groove); }
+  .cmp-th-param{ font-family:var(--label); font-weight:600; font-size:10px; letter-spacing:0.08em;
+    text-transform:uppercase; color:var(--ink-2); padding:6px 12px 6px 0; text-align:left; white-space:nowrap; }
+  .cmp-th-model{ font-family:var(--mono); font-size:10.5px; font-weight:700; letter-spacing:0.05em; padding:6px 10px; text-align:center; white-space:nowrap; }
+  .cmp-td-param{ font-family:var(--label); font-weight:600; font-size:10px; letter-spacing:0.06em;
+    text-transform:uppercase; color:var(--ink-2); padding:5px 12px 5px 0; white-space:nowrap; border-bottom:1px solid rgba(0,0,0,0.12); }
+  .cmp-td{ font-family:var(--mono); font-size:10px; color:var(--ink); padding:5px 10px; text-align:center;
+    border-bottom:1px solid rgba(0,0,0,0.12); border-left:2px solid color-mix(in srgb,var(--mc,#000) 28%,transparent); white-space:nowrap; }
+  .cmp-bars-section{ display:flex; flex-direction:column; gap:20px; }
+  .cmp-bar-group{ display:flex; flex-direction:column; gap:4px; }
+  .cmp-bar-title{ font-family:var(--label); font-weight:700; font-size:10px; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--ink-2); margin-bottom:4px; }
+  .cmp-bar-scale-row{ display:flex; justify-content:space-between; align-items:center; font-family:var(--mono);
+    font-size:9px; color:var(--ink-3); margin-bottom:4px; }
+  .cmp-scale-mid{ font-size:8.5px; opacity:0.7; }
+  .cmp-bar-row{ display:flex; align-items:center; gap:8px; }
+  .cmp-bar-model-name{ font-family:var(--mono); font-size:9.5px; font-weight:700; letter-spacing:0.04em; width:52px; flex-shrink:0; text-align:right; }
+  .cmp-bar-track{ flex:1; height:11px; background:#15171b; border:1px solid #000; border-radius:3px;
+    position:relative; overflow:hidden; box-shadow:inset 0 1px 2px rgba(0,0,0,0.6); }
+  .cmp-bar-fill{ position:absolute; top:0; height:100%; border-radius:2px; opacity:0.92; }
+  .cmp-bar-range-text{ font-family:var(--mono); font-size:9px; color:var(--ink-3); white-space:nowrap; width:120px; flex-shrink:0; }
+  .cmp-table tbody tr{ transition:background .08s; }
+  .cmp-table tbody tr:hover .cmp-td{ background:color-mix(in srgb,var(--mc,var(--accent)) 14%,transparent); }
+  .cmp-table tbody tr:hover .cmp-td-param{ color:var(--ink); }
+  .cmp-th-model.cmp-active{ background:color-mix(in srgb,var(--mc,var(--accent)) 16%,transparent); border-bottom:2px solid var(--mc,var(--accent)); }
+  .cmp-td.cmp-active{ background:color-mix(in srgb,var(--mc,var(--accent)) 12%,transparent); border-left-width:3px; }
+  .model-action-panel{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 14px;
+    background:#13151a; border:1px solid #000; border-radius:6px; margin-bottom:12px; box-shadow:inset 0 1px 3px rgba(0,0,0,0.6); }
+  .action-badge{ font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase;
+    padding:2px 8px; border-radius:3px; white-space:nowrap; color:var(--accent); border:1px solid var(--accent-dim);
+    background:color-mix(in srgb,var(--accent) 12%,transparent); }
+  .action-desc{ font-family:var(--mono); font-size:9.5px; color:#8b9098; line-height:1.55; }
+  .manual-overlay{ display:none; position:fixed; inset:0; z-index:200; background:rgba(18,18,20,0.72);
+    backdrop-filter:blur(4px); align-items:flex-start; justify-content:center; padding:32px 20px; overflow-y:auto; }
+  .manual-overlay.open{ display:flex; }
+  .manual-modal{ background:#f1ede3; border:1px solid #ccc6b6; border-radius:8px; width:100%; max-width:780px;
+    box-shadow:0 40px 90px -16px rgba(0,0,0,0.7); color:#2c2a24; }
+  .manual-header{ display:flex; align-items:center; justify-content:space-between; padding:18px 26px;
+    border-bottom:2px solid #2c2a24; background:#e9e4d7; border-radius:8px 8px 0 0; }
+  .manual-header h2{ font-family:var(--sans); font-size:18px; font-weight:600; letter-spacing:0.02em; color:#2c2a24; }
+  .manual-close{ font-family:var(--label); font-weight:600; font-size:12px; letter-spacing:0.06em; color:#6b6155;
+    background:#dcd6c7; border:1px solid #bbb3a2; padding:6px 13px; border-radius:5px; cursor:pointer; transition:color .12s,border-color .12s; }
+  .manual-close:hover{ color:#b23b2a; border-color:#b23b2a; }
+  .manual-body{ padding:26px 28px 36px; display:flex; flex-direction:column; gap:30px; }
+  .manual-section h3{ font-family:var(--label); font-size:13px; font-weight:700; letter-spacing:0.2em;
+    text-transform:uppercase; color:#9a6a2a; margin-bottom:14px; padding-bottom:8px; border-bottom:1px solid #d8d1c0; }
+  .manual-section p{ font-family:var(--sans); font-size:14.5px; color:#4a463d; line-height:1.75; margin-bottom:8px; }
+  .manual-section p:last-child{ margin-bottom:0; }
+  .manual-section strong{ color:#2c2a24; }
+  .manual-param-list{ display:flex; flex-direction:column; border:1px solid #d3ccba; border-radius:7px; overflow:hidden; }
+  .manual-param{ display:grid; grid-template-columns:168px 1fr; gap:0 20px; align-items:start; padding:12px 16px; border-bottom:1px solid #ddd8cd; }
+  .manual-param:last-child{ border-bottom:none; }
+  .manual-param:nth-child(even){ background:#e9e4d7; }
+  .manual-param-head{ display:flex; flex-direction:column; gap:3px; }
+  .manual-param-name{ font-family:var(--sans); font-size:13.5px; font-weight:700; color:#2c2a24; }
+  .manual-param-range{ font-family:var(--mono); font-size:10.5px; color:#9a6a2a; }
+  .manual-param-desc{ font-family:var(--sans); font-size:13.5px; color:#4a463d; line-height:1.62; padding-top:1px; }
+  .manual-model-list{ display:flex; flex-direction:column; gap:8px; }
+  .manual-model-item{ display:flex; gap:14px; align-items:center; padding:14px 16px; background:#e9e4d7; border:1px solid #d3ccba; border-radius:6px; }
+  .manual-model-badge{ font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:0.05em; padding:5px 11px;
+    border-radius:4px; white-space:nowrap; flex-shrink:0; min-width:60px; text-align:center; }
+  .manual-model-info{ font-family:var(--sans); font-size:13.5px; color:#4a463d; line-height:1.65; }
+  .manual-model-info strong{ color:#2c2a24; font-weight:700; }
+  .manual-tips{ list-style:none; display:flex; flex-direction:column; gap:10px; }
+  .manual-tips li{ font-family:var(--sans); font-size:14px; color:#4a463d; line-height:1.65; padding-left:18px; position:relative; }
+  .manual-tips li::before{ content:'▶'; color:#9a6a2a; font-size:8px; position:absolute; left:0; top:5px; }
+  @keyframes knob-arc-flash{ 0%{ stroke:rgba(255,255,255,0.92); } 100%{ stroke:var(--accent); } }
+  .kb-arc.flashing{ animation:knob-arc-flash 0.4s ease-out; }
+  #grMeterTrack{ cursor:pointer; }
+  #grPeakLine{ position:absolute; left:1px; right:1px; height:2px; background:var(--accent);
+    box-shadow:0 0 5px var(--accent); display:none; pointer-events:none; z-index:2; }
+  .ahr-diagram{ margin-top:14px; padding:12px 15px; background:#13151a; border:1px solid #000; border-radius:6px; box-shadow:inset 0 1px 3px rgba(0,0,0,0.6); }
+  .ahr-diag-title{ font-family:var(--label); font-weight:700; font-size:11.5px; letter-spacing:0.12em; text-transform:uppercase; color:#8b9098; margin-bottom:10px; }
+  .ahr-row{ display:flex; align-items:center; gap:5px; }
+  .ahr-event{ font-family:var(--sans); font-size:10.5px; color:#7a8089; text-align:center; white-space:nowrap; line-height:1.4; flex-shrink:0; }
+  .ahr-arr{ font-size:10px; color:#3a3f48; flex-shrink:0; }
+  .ahr-phase{ display:flex; flex-direction:column; align-items:center; gap:3px; min-width:0; }
+  .ahr-phase-bar{ height:15px; width:100%; border-radius:3px; }
+  .ahr-attack-phase .ahr-phase-bar{ background:rgba(202,162,79,0.7); }
+  .ahr-hold-phase .ahr-phase-bar{ background:color-mix(in srgb,var(--accent) 65%,transparent); }
+  .ahr-release-phase .ahr-phase-bar{ background:rgba(130,171,134,0.7); }
+  .ahr-phase-lbl{ font-family:var(--sans); font-size:10.5px; color:#8b9098; text-align:center; line-height:1.3; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; }
+  .ahr-phase-lbl span{ color:#c4c1b7; }
+  .mobile-tabs{ display:none; }
+  .mobile-transport{ display:none; }
+  @media (max-width:1000px){
+    .viz-row{ grid-template-columns:1fr; }
+    .right-col{ flex-direction:row; flex-wrap:wrap; }
+    .right-col>.card{ flex:1; min-width:280px; }
+  }
+  @media (max-width:720px){
+    .dyn-sep{ display:none; }
+    .transport{ margin-left:0; }
+  }
+  @media (max-width:768px){
+    body{ padding:14px 8px 40px; }
+    .ear{ width:18px; }
+    .body{ padding:14px 13px 18px; gap:12px; }
+    .card{ padding:12px 14px; }
+    .titlebar{ padding:11px 14px; gap:8px; }
+    .spec-tag{ display:none; }
+    .toolbar{ gap:12px; }
+    .tb-group{ gap:6px; }
+    .knob{ width:60px; height:60px; }
+    .param{ width:76px; }
+    .param-val{ width:60px; font-size:13px; padding:3px 5px; }
+    .range-bar-wrap{ width:60px; }
+    .range-lbl{ font-size:7.5px; }
+    .knob-bank{ gap:6px; }
+    .dyn-grid{ gap:14px; }
+    .gain-col{ min-width:0; width:100%; max-width:100%; }
+    .meter-track{ height:130px; }
+    .meter-scale{ height:130px; }
+    .meters{ gap:8px; }
+    .right-col>.card{ min-width:0; }
+    .cmp-scale-mid{ display:none; }
+    .cmp-bar-range-text{ width:90px; font-size:8px; }
+    .manual-body{ padding:16px 18px 22px; gap:22px; }
+    .manual-param{ grid-template-columns:130px 1fr; gap:0 12px; }
+    .sec-title{ letter-spacing:0.16em; }
+  }
+  @media (max-width:480px){
+    .brand-text strong{ font-size:16px; }
+    .brand-text small{ font-size:9px; }
+    .manual-btn{ font-size:10px; padding:5px 9px; }
+    .preset-btn{ font-size:10px; padding:6px 9px; }
+    .btn{ font-size:11.5px; padding:6px 10px; }
+    .cmp-bar-model-name{ width:42px; }
+    .cmp-bar-range-text{ display:none; }
+    .manual-model-item{ flex-direction:column; gap:6px; }
+  }
+  @media (max-width:600px){
+    .mobile-tabs{ display:flex; gap:0; flex-shrink:0; background:#15171b; border:1px solid #000; border-radius:6px;
+      overflow:hidden; box-shadow:inset 0 1px 3px rgba(0,0,0,0.55); }
+    .mtab{ flex:1; font-family:var(--label); font-size:12.5px; font-weight:600; letter-spacing:0.04em; color:#9a9990;
+      background:transparent; border:none; border-right:1px solid #000; padding:12px 4px; cursor:pointer; transition:color .1s,background .1s; }
+    .mtab:last-child{ border-right:none; }
+    .mtab:hover{ color:#cfccc3; }
+    .mtab.active{ color:#0e1418; background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 80%,#fff),var(--accent)); }
+    .mobile-transport{ display:flex; gap:6px; align-items:center; position:fixed; bottom:0; left:0; right:0; z-index:100;
+      padding:8px 12px 12px; background:#23242a; border-top:1px solid #000; box-shadow:0 -6px 20px rgba(0,0,0,0.5); }
+    .mobile-transport .btn{ flex:1; text-align:center; }
+    #mPlayBtn.btn{ color:#7fe09a; }
+    #mStopBtn.btn{ color:#e2897a; }
+    .body{ padding-bottom:64px !important; }
+    .body[data-tab] .tagline{ display:none; }
+    .body[data-tab] #card-model,
+    .body[data-tab] #card-source,
+    .body[data-tab] #card-dynamics,
+    .body[data-tab] #card-analysis,
+    .body[data-tab] #card-compare{ display:none; }
+    .body[data-tab="model"] #card-model{ display:block; }
+    .body[data-tab="ctrl"] #card-source,
+    .body[data-tab="ctrl"] #card-dynamics{ display:block; }
+    .body[data-tab="analysis"] #card-analysis{ display:grid; }
+    .body[data-tab="compare"] #card-compare{ display:block; }
+  }
+
+</style>
+</head>
+<body>
+<div class="rack"><span class="ear ear-l"></span><div class="plugin">
+
+  <!-- ── Title bar ── -->
+  <div class="titlebar">
+    <div class="brand">
+      <span class="power-led" title="Power"></span>
+      <svg class="mark" viewBox="0 0 32 32" fill="none">
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#2b2a25" stroke-width="1.4"/>
+        <g stroke="#56544d" stroke-width="1.2" stroke-linecap="round">
+          <line x1="16" y1="4.5" x2="16" y2="7"/>
+          <line x1="27.5" y1="16" x2="25" y2="16"/>
+          <line x1="4.5" y1="16" x2="7" y2="16"/>
+          <line x1="16" y1="27.5" x2="16" y2="25"/>
+        </g>
+        <circle cx="16" cy="16" r="7.5" fill="#33363c" stroke="#15161a" stroke-width="1"/>
+        <line x1="16" y1="16" x2="16" y2="9.5" stroke="#e8e4d8" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      <div class="brand-text">
+        <strong>EDU COMPRESSOR</strong>
+        <small>Compressor Simulator for Education</small>
+      </div>
+    </div>
+    <div class="titlebar-meta">
+      <span class="spec-tag">44.1 kHz</span>
+      <span class="spec-tag">Mk II</span>
+      <button class="manual-btn" id="openManualBtn">매뉴얼 &#9656;</button>
+    </div>
+  </div>
+
+  <div class="body">
+    <!-- ── Mobile tab navigation (≤600px only) ── -->
+    <nav class="mobile-tabs" role="tablist" aria-label="섹션 이동">
+      <button class="mtab" data-tab="model"    role="tab">모델</button>
+      <button class="mtab" data-tab="ctrl"     role="tab">컨트롤</button>
+      <button class="mtab" data-tab="analysis" role="tab">분석</button>
+      <button class="mtab" data-tab="compare"  role="tab">비교</button>
+    </nav>
+    <p class="tagline">샘플을 선택하고 파라미터를 조절하며 원본과 압축 신호의 차이를 비교해 보세요.</p>
+
+    <!-- ── 00 Compressor Model ── -->
+    <div class="card" id="card-model">
+      <div class="sec-head">
+        <span class="sec-num">00</span>
+        <span class="sec-title">Compressor Model</span>
+        <span class="sec-line"></span>
+        <span style="font-family:var(--mono);font-size:9.5px;color:var(--text-3);">프리셋 선택 → 파라미터 자동 설정 + 스펙 표시</span>
+      </div>
+      <div class="preset-row">
+        <button class="preset-btn selected" data-preset="free" style="--preset-color:#9aa0a8">FREE</button>
+        <button class="preset-btn" data-preset="la2a" style="--preset-color:#d6a24c">LA-2A</button>
+        <button class="preset-btn" data-preset="1176" style="--preset-color:#5fb2d4">1176</button>
+        <button class="preset-btn" data-preset="ssl" style="--preset-color:#9b8cd8">SSL-G</button>
+        <!-- DEV-ONLY: 교육 범위 초과 모델 — 필요시 주석 해제
+        <button class="preset-btn" data-preset="fairchild" style="--preset-color:#cf7da0">FC-670</button>
+        <button class="preset-btn" data-preset="dbx160" style="--preset-color:#6fb98a">DBX160</button>
+        <button class="preset-btn" data-preset="neve33609" style="--preset-color:#82ab86">NEVE</button>
+        <button class="preset-btn" data-preset="distressor" style="--preset-color:#b8c0cc">DSTRSS</button>
+        -->
+      </div>
+      <!-- DEV-ONLY: 모델별 고급 기능 패널 — 필요시 주석 해제
+      <div id="allBtnsPanel" class="model-action-panel" style="display:none;">
+        <button id="allBtnsBtn" class="btn">ALL BTNS</button>
+        <span class="action-badge">1176 전용</span>
+        <span class="action-desc">4+8+12+20:1 동시 압입 — 최단 어택·릴리즈 강제 + 소프트 클리핑 왜곡. FET 소자의 비선형 포화 영역 동작으로 고조파 왜곡과 극단적 게인 리덕션을 시뮬레이션합니다.</span>
+      </div>
+      <div id="autoRelPanel" class="model-action-panel" style="display:none;">
+        <button id="autoRelBtn" class="btn">AUTO REL</button>
+        <span class="action-badge">SSL-G / NEVE 전용</span>
+        <span class="action-desc">프로그램 의존 릴리즈 — 짧은 트랜지언트는 빠르게, 지속음은 느리게 자동 조절. 설정된 Release 값을 기준으로 빠른(×0.08)·느린(×3.5) 릴리즈를 압축 지속 시간에 따라 블렌딩합니다.</span>
+      </div>
+      -->
+      <div id="modelInfo" style="display:none;"></div>
+    </div>
+
+    <!-- ── 01 Source ── -->
+    <div class="card" id="card-source">
+      <div class="sec-head">
+        <span class="sec-num">01</span>
+        <span class="sec-title">Source</span>
+        <span class="sec-line"></span>
+      </div>
+      <div class="toolbar">
+        <div class="tb-group">
+          <div class="tb-label">Sample</div>
+          <div class="chips">
+            <button class="btn selected" data-sample="kick">Kick</button>
+            <button class="btn" data-sample="snare">Snare</button>
+            <button class="btn" data-sample="hihat">Hi-Hat</button>
+            <button class="btn" data-sample="tom">Tom</button>
+            <button class="btn" data-sample="clap">Clap</button>
+            <button class="btn" data-sample="bass">Bass</button>
+          </div>
+        </div>
+        <div class="tb-group">
+          <div class="tb-label">Repeat</div>
+          <div class="seg">
+            <button class="btn" data-rep="1">×1</button>
+            <button class="btn selected" data-rep="2">×2</button>
+            <button class="btn" data-rep="3">×3</button>
+            <button class="btn" data-rep="4">×4</button>
+          </div>
+        </div>
+        <div class="tb-group" style="min-width:190px;">
+          <div class="tb-label">Hit Spacing <span class="v" id="hitSpacingValue">200 ms</span>
+            <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Hit Spacing</strong>반복 재생 시 타격음 사이의 무음 길이(ms).</span></span>
+          </div>
+          <input id="hitSpacing" class="fx" type="range" min="0" max="800" value="200" step="20" />
+        </div>
+        <div class="transport">
+          <button id="playOrigBtn" class="btn" title="원본(무처리) 재생">▶ 원본</button>
+          <button id="playBtn" class="btn">▶ 컴프</button>
+          <button id="stopBtn" class="btn">■ Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 02 Dynamics ── -->
+    <div class="card" id="card-dynamics">
+      <div class="sec-head">
+        <span class="sec-num">02</span>
+        <span class="sec-title">Dynamics</span>
+        <span class="sec-line"></span>
+      </div>
+      <div class="dyn-grid">
+        <div class="knob-bank">
+
+          <!-- Threshold -->
+          <div class="param">
+            <div class="param-label">Threshold
+              <span class="help tl" tabindex="0" role="note">?<span class="tip"><strong>Threshold</strong>이 레벨을 초과하는 신호에만 압축이 적용됩니다. 낮출수록 압축 구간이 넓어집니다.</span></span>
+            </div>
+            <div class="knob" data-for="threshold" data-default="-24"></div>
+            <input id="threshold" class="knob-input" type="range" min="-80" max="0" value="-24" step="1" />
+            <input type="text" class="param-val" id="thresholdValue" value="-24 dB" data-param="threshold" />
+            <div class="range-bar-wrap">
+              <div class="range-bar"><div class="range-fill" id="thresholdRangeFill" style="left:0%;width:100%"></div></div>
+              <div class="range-lbl" id="thresholdRangeLabel">-80 ~ 0 dB</div>
+            </div>
+          </div>
+
+          <!-- Ratio -->
+          <div class="param">
+            <div class="param-label">Ratio
+              <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Ratio</strong>초과분 압축비. 4:1이면 초과 4 dB가 1 dB로 줄어듭니다. ∞:1(100:1)은 하드 리미터.</span></span>
+            </div>
+            <div class="knob" data-for="ratio" data-default="4" data-curve="log"></div>
+            <input id="ratio" class="knob-input" type="range" min="1" max="100" value="4" step="0.5" />
+            <input type="text" class="param-val" id="ratioValue" value="4.0:1" data-param="ratio" />
+            <div class="range-bar-wrap">
+              <div class="range-bar"><div class="range-fill" id="ratioRangeFill" style="left:0%;width:100%"></div></div>
+              <div class="range-lbl" id="ratioRangeLabel">1:1 ~ ∞:1</div>
+            </div>
+          </div>
+
+          <!-- Knee -->
+          <div class="param">
+            <div class="param-label">Knee
+              <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Knee</strong>전이 구간 폭. 0 = 하드(즉시 전이), 클수록 소프트(점진적 전이).</span></span>
+            </div>
+            <div class="knob" data-for="knee" data-default="6"></div>
+            <input id="knee" class="knob-input" type="range" min="0" max="30" value="6" step="1" />
+            <input type="text" class="param-val" id="kneeValue" value="6 dB" data-param="knee" />
+            <div class="range-bar-wrap">
+              <div class="range-bar"><div class="range-fill" id="kneeRangeFill" style="left:0%;width:100%"></div></div>
+              <div class="range-lbl" id="kneeRangeLabel">0 ~ 30 dB</div>
+            </div>
+          </div>
+
+          <!-- Attack -->
+          <div class="param">
+            <div class="param-label">Attack
+              <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Attack</strong>압축 개시 속도 (μs ~ ms). 짧으면 트랜지언트를 즉각 압축, 길면 어택 구간이 통과합니다.</span></span>
+            </div>
+            <div class="knob" data-for="attack" data-default="5" data-curve="log"></div>
+            <input id="attack" class="knob-input" type="range" min="0.02" max="300" value="5" step="0.01" />
+            <input type="text" class="param-val" id="attackValue" value="5.00 ms" data-param="attack" />
+            <div class="range-bar-wrap">
+              <div class="range-bar"><div class="range-fill" id="attackRangeFill" style="left:0%;width:100%"></div></div>
+              <div class="range-lbl" id="attackRangeLabel">0.02ms ~ 300ms</div>
+            </div>
+          </div>
+
+          <!-- Hold -->
+          <div class="param">
+            <div class="param-label">Hold
+              <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Hold</strong>릴리즈 시작 전 현재 GR을 유지하는 시간. 빠른 연타의 채터링을 방지합니다.</span></span>
+            </div>
+            <div class="knob" data-for="hold" data-default="20" data-curve="2"></div>
+            <input id="hold" class="knob-input" type="range" min="0" max="500" value="20" step="1" />
+            <input type="text" class="param-val" id="holdValue" value="20 ms" data-param="hold" />
+            <div class="range-bar-wrap">
+              <div class="range-bar"><div class="range-fill" id="holdRangeFill" style="left:0%;width:100%"></div></div>
+              <div class="range-lbl" id="holdRangeLabel">0 ~ 500 ms</div>
+            </div>
+          </div>
+
+          <!-- Release -->
+          <div class="param">
+            <div class="param-label">Release
+              <span class="help tr" tabindex="0" role="note">?<span class="tip"><strong>Release</strong>압축 해제 속도. 짧으면 펌핑 아티팩트, 길면 다음 히트에 GR이 잔존합니다.</span></span>
+            </div>
+            <div class="knob" data-for="release" data-default="80" data-curve="log"></div>
+            <input id="release" class="knob-input" type="range" min="1" max="25000" value="80" step="1" />
+            <input type="text" class="param-val" id="releaseValue" value="80 ms" data-param="release" />
+            <div class="range-bar-wrap">
+              <div class="range-bar"><div class="range-fill" id="releaseRangeFill" style="left:0%;width:100%"></div></div>
+              <div class="range-lbl" id="releaseRangeLabel">1ms ~ 5.0s</div>
+            </div>
+          </div>
+
+        </div><!-- /knob-bank -->
+
+        <div class="dyn-sep"></div>
+
+        <div class="gain-col">
+          <div class="fader">
+            <div class="fader-head">
+              <span class="lbl">Source Gain
+                <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Source Gain</strong>입력 전 레벨 조절. 올릴수록 Threshold를 더 자주·크게 초과해 압축량이 증가합니다.</span></span>
+              </span>
+              <span class="val-mono" id="sourceGainValue">0 dB</span>
+            </div>
+            <input id="sourceGain" class="fx" type="range" min="-24" max="24" value="0" step="1" />
+          </div>
+          <div class="fader">
+            <div class="fader-head">
+              <span class="lbl">Makeup Gain
+                <span class="help" tabindex="0" role="note">?<span class="tip"><strong>Makeup Gain</strong>압축 후 레벨 보상. AUTO는 최대 GR만큼 자동 보정합니다.</span></span>
+              </span>
+              <span class="right">
+                <button id="autoMakeupBtn" class="btn">AUTO</button>
+                <span class="val-mono" id="makeupGainValue">+0 dB</span>
+              </span>
+            </div>
+            <input id="makeupGain" class="fx" type="range" min="0" max="40" value="0" step="0.5" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 03 Analysis ── -->
+    <div class="viz-row" id="card-analysis">
+      <div class="card">
+        <div class="sec-head">
+          <span class="sec-num">03</span>
+          <span class="sec-title">Waveform &amp; Dynamics</span>
+          <span class="sec-line"></span>
+          <div class="seg" style="margin-left:4px;">
+            <button class="btn" data-listen="original">원본</button>
+            <button class="btn" data-listen="compressed">컴프</button>
+            <button class="btn selected" data-listen="makeup">+ Makeup</button>
+          </div>
+        </div>
+        <div class="canvas-well">
+          <canvas id="waveformCanvas" width="880" height="500"></canvas>
+        </div>
+        <div class="legend-row">
+          <span style="color:var(--text-2);">▬ 원본</span>
+          <span class="sep">/</span>
+          <span id="processedLegend" style="color:var(--accent);">▬ 컴프레스</span>
+          <span class="sep">/</span>
+          <span style="color:var(--amber);">▬ Threshold</span>
+          <span class="sep">/</span>
+          <span style="color:var(--amber);">▮ Attack</span>
+          <span style="color:var(--accent);">▮ Hold</span>
+          <span style="color:var(--sage);">▮ Release</span>
+        </div>
+        <!-- AHR Timeline Diagram -->
+        <div class="ahr-diagram">
+          <div class="ahr-diag-title">Attack · Hold · Release 타임라인</div>
+          <div class="ahr-row">
+            <span class="ahr-event">임계점<br>초과</span>
+            <span class="ahr-arr">▶</span>
+            <div class="ahr-phase ahr-attack-phase" id="ahrAttackPhase">
+              <div class="ahr-phase-bar"></div>
+              <div class="ahr-phase-lbl">Attack<br><span id="ahrAttackVal">—</span></div>
+            </div>
+            <span class="ahr-arr">▶</span>
+            <div class="ahr-phase ahr-hold-phase" id="ahrHoldPhase">
+              <div class="ahr-phase-bar"></div>
+              <div class="ahr-phase-lbl">Hold<br><span id="ahrHoldVal">—</span></div>
+            </div>
+            <span class="ahr-arr">▶</span>
+            <div class="ahr-phase ahr-release-phase" id="ahrReleasePhase">
+              <div class="ahr-phase-bar"></div>
+              <div class="ahr-phase-lbl">Release<br><span id="ahrReleaseVal">—</span></div>
+            </div>
+            <span class="ahr-arr">▶</span>
+            <span class="ahr-event">복귀</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-col">
+        <div class="card">
+          <div class="sec-head">
+            <span class="sec-num">04</span>
+            <span class="sec-title">Transfer Curve</span>
+            <span class="sec-line"></span>
+            <label class="curve-toggle"><input type="checkbox" id="curveMakeup" /> Makeup 반영</label>
+          </div>
+          <div class="canvas-well">
+            <canvas id="compressorCanvas" width="400" height="300"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="sec-head">
+            <span class="sec-num">05</span>
+            <span class="sec-title">Level Meters · dBFS</span>
+            <span class="sec-line"></span>
+          </div>
+          <div class="meters">
+            <div class="meter">
+              <span class="meter-label">Input</span>
+              <div class="meter-track-wrap">
+                <div class="meter-track"><div id="inputMeterFill"></div></div>
+                <div class="meter-scale">
+                  <div class="meter-tick" style="top:0%"><span class="meter-tick-lbl">0</span></div>
+                  <div class="meter-tick" style="top:10%"><span class="meter-tick-lbl">-6</span></div>
+                  <div class="meter-tick" style="top:20%"><span class="meter-tick-lbl">-12</span></div>
+                  <div class="meter-tick" style="top:30%"><span class="meter-tick-lbl">-18</span></div>
+                  <div class="meter-tick" style="top:40%"><span class="meter-tick-lbl">-24</span></div>
+                  <div class="meter-tick" style="top:50%"><span class="meter-tick-lbl">-30</span></div>
+                  <div class="meter-tick" style="top:60%"><span class="meter-tick-lbl">-36</span></div>
+                  <div class="meter-tick" style="top:70%"><span class="meter-tick-lbl">-42</span></div>
+                  <div class="meter-tick" style="top:80%"><span class="meter-tick-lbl">-48</span></div>
+                  <div class="meter-tick" style="top:90%"><span class="meter-tick-lbl">-54</span></div>
+                  <div class="meter-tick" style="top:100%"><span class="meter-tick-lbl">-60</span></div>
+                </div>
+              </div>
+              <div class="meter-val" id="inputMeterLabel">-∞</div>
+            </div>
+            <div class="meter">
+              <span class="meter-label">GR</span>
+              <div class="meter-track-wrap">
+                <div class="meter-track" id="grMeterTrack" title="클릭하여 피크 홀드 리셋">
+                  <div id="grMeterFill"></div>
+                  <div id="grPeakLine"></div>
+                </div>
+                <div class="meter-scale">
+                  <div class="meter-tick" style="top:0%"><span class="meter-tick-lbl">0</span></div>
+                  <div class="meter-tick" style="top:12.5%"><span class="meter-tick-lbl">-3</span></div>
+                  <div class="meter-tick" style="top:25%"><span class="meter-tick-lbl">-6</span></div>
+                  <div class="meter-tick" style="top:37.5%"><span class="meter-tick-lbl">-9</span></div>
+                  <div class="meter-tick" style="top:50%"><span class="meter-tick-lbl">-12</span></div>
+                  <div class="meter-tick" style="top:62.5%"><span class="meter-tick-lbl">-15</span></div>
+                  <div class="meter-tick" style="top:75%"><span class="meter-tick-lbl">-18</span></div>
+                  <div class="meter-tick" style="top:87.5%"><span class="meter-tick-lbl">-21</span></div>
+                  <div class="meter-tick" style="top:100%"><span class="meter-tick-lbl">-24</span></div>
+                </div>
+              </div>
+              <div class="meter-val" id="grMeterLabel">0.0</div>
+            </div>
+            <div class="meter">
+              <span class="meter-label">Output</span>
+              <div class="meter-track-wrap">
+                <div class="meter-track"><div id="outputMeterFill"></div></div>
+                <div class="meter-scale">
+                  <div class="meter-tick" style="top:0%"><span class="meter-tick-lbl">0</span></div>
+                  <div class="meter-tick" style="top:10%"><span class="meter-tick-lbl">-6</span></div>
+                  <div class="meter-tick" style="top:20%"><span class="meter-tick-lbl">-12</span></div>
+                  <div class="meter-tick" style="top:30%"><span class="meter-tick-lbl">-18</span></div>
+                  <div class="meter-tick" style="top:40%"><span class="meter-tick-lbl">-24</span></div>
+                  <div class="meter-tick" style="top:50%"><span class="meter-tick-lbl">-30</span></div>
+                  <div class="meter-tick" style="top:60%"><span class="meter-tick-lbl">-36</span></div>
+                  <div class="meter-tick" style="top:70%"><span class="meter-tick-lbl">-42</span></div>
+                  <div class="meter-tick" style="top:80%"><span class="meter-tick-lbl">-48</span></div>
+                  <div class="meter-tick" style="top:90%"><span class="meter-tick-lbl">-54</span></div>
+                  <div class="meter-tick" style="top:100%"><span class="meter-tick-lbl">-60</span></div>
+                </div>
+              </div>
+              <div class="meter-val" id="outputMeterLabel">-∞</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── 06 Compare ── -->
+    <div class="card" id="card-compare">
+      <div class="sec-head compare-toggle-row">
+        <span class="sec-num">06</span>
+        <span class="sec-title">Compressor Compare</span>
+        <span class="sec-line"></span>
+      </div>
+      <div class="compare-body" id="compareBody">
+        <div id="compareTable"></div>
+      </div>
+    </div>
+
+  </div><!-- /body -->
+</div><span class="ear ear-r"></span></div><!-- /rack -->
+
+<!-- ── Mobile persistent transport bar (≤600px, position:fixed bottom) ── -->
+<div class="mobile-transport" id="mobileTransport">
+  <button id="mPlayOrigBtn" class="btn">▶ 원본</button>
+  <button id="mPlayBtn"     class="btn">▶ 컴프</button>
+  <button id="mStopBtn"     class="btn">■ Stop</button>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MANUAL MODAL
+══════════════════════════════════════════ -->
+<div class="manual-overlay" id="manualOverlay">
+  <div class="manual-modal">
+    <div class="manual-header">
+      <h2>컴프레서 시뮬레이터 매뉴얼</h2>
+      <button class="manual-close" id="closeManualBtn">✕ 닫기</button>
+    </div>
+    <div class="manual-body">
+
+      <!-- Section 1 -->
+      <div class="manual-section">
+        <h3>컴프레서란?</h3>
+        <p>Threshold를 초과하는 신호를 Ratio 비율로 압축해 다이나믹 레인지를 좁히는 장치입니다. 압축으로 낮아진 전체 레벨은 <strong>Makeup Gain</strong>으로 보상합니다.</p>
+      </div>
+
+      <!-- Section 2 -->
+      <div class="manual-section">
+        <h3>파라미터</h3>
+        <div class="manual-param-list">
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Threshold</div>
+              <div class="manual-param-range">−80 ~ 0 dB</div>
+            </div>
+            <div class="manual-param-desc">압축이 시작되는 레벨. 낮출수록 압축 구간이 넓어집니다.</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Ratio</div>
+              <div class="manual-param-range">1:1 ~ ∞:1</div>
+            </div>
+            <div class="manual-param-desc">초과분 압축비. 4:1이면 초과 4 dB가 1 dB로 줄어듦. ∞:1(100:1)은 하드 리미터.</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Knee</div>
+              <div class="manual-param-range">0 ~ 30 dB</div>
+            </div>
+            <div class="manual-param-desc">전이 구간 폭. 0 = 하드(즉시 전이), 클수록 소프트(점진적 전이).</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Attack</div>
+              <div class="manual-param-range">20 μs ~ 300 ms</div>
+            </div>
+            <div class="manual-param-desc">압축 개시 속도. 짧으면 트랜지언트를 즉각 압축, 길면 어택 구간이 통과합니다.</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Release</div>
+              <div class="manual-param-range">1 ms ~ 5.0 s</div>
+            </div>
+            <div class="manual-param-desc">압축 해제 속도. 짧으면 펌핑(pumping) 아티팩트, 길면 다음 히트에 GR이 잔존합니다.</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Hold</div>
+              <div class="manual-param-range">0 ~ 500 ms</div>
+            </div>
+            <div class="manual-param-desc">릴리즈 시작 전 GR을 유지하는 시간. 빠른 연타의 채터링 방지에 유효합니다.</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Source Gain</div>
+              <div class="manual-param-range">−24 ~ +24 dB</div>
+            </div>
+            <div class="manual-param-desc">입력 전 레벨 조절. 올릴수록 Threshold를 더 자주·크게 초과해 압축량이 증가합니다.</div>
+          </div>
+          <div class="manual-param">
+            <div class="manual-param-head">
+              <div class="manual-param-name">Makeup Gain</div>
+              <div class="manual-param-range">0 ~ +40 dB</div>
+            </div>
+            <div class="manual-param-desc">압축 후 레벨 보상. <strong>AUTO</strong>는 최대 GR만큼 자동 보정하여 원본과 유사한 레벨을 유지합니다.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 3 -->
+      <div class="manual-section">
+        <h3>컴프레서 모델</h3>
+        <div class="manual-model-list">
+          <div class="manual-model-item">
+            <span class="manual-model-badge" style="background:#d6a24c;color:#1a1000">LA-2A</span>
+            <div class="manual-model-info">
+              <strong>Optical · Tube (1962)</strong> — 어택·릴리즈가 신호 특성에 따라 자동 반응. 파라미터 조작이 단순하며 부드럽고 투명한 압축이 특징.
+            </div>
+          </div>
+          <div class="manual-model-item">
+            <span class="manual-model-badge" style="background:#5fb2d4;color:#001a28">1176</span>
+            <div class="manual-model-info">
+              <strong>FET (1967)</strong> — 20~800 μs의 극단적으로 빠른 어택. 트랜지언트 정밀 제어에 강점. Ratio는 4/8/12/20:1 고정값으로 선택.
+            </div>
+          </div>
+          <div class="manual-model-item">
+            <span class="manual-model-badge" style="background:#9b8cd8;color:#0a0018">SSL-G</span>
+            <div class="manual-model-info">
+              <strong>VCA Bus (1980s)</strong> — 믹스를 하나로 묶는 "Glue" 효과. Attack 0.1~30 ms, Ratio 2/4/10:1 단계 선택. 드럼·믹스 버스에 가장 많이 사용.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4 -->
+      <div class="manual-section">
+        <h3>사용 팁</h3>
+        <ul class="manual-tips">
+          <li><strong>Attack으로 트랜지언트 조절</strong> — 짧게 설정하면 피크가 압축되고, 길게 설정하면 어택 구간이 통과해 펀치감이 살아납니다.</li>
+          <li><strong>Release와 히트 간격</strong> — Release가 히트 간격보다 길면 다음 히트 시작 시 GR이 남아 있습니다. Hit Spacing을 늘려 가며 차이를 관찰해 보세요.</li>
+          <li><strong>AUTO Makeup 활용</strong> — AUTO를 켜면 레벨 차이 없이 음색 변화만 비교할 수 있습니다.</li>
+          <li><strong>노브 조작</strong> — 더블클릭으로 기본값 초기화, Shift+드래그로 미세 조절이 가능합니다.</li>
+        </ul>
+      </div>
+
+    </div><!-- /manual-body -->
+  </div><!-- /manual-modal -->
+</div><!-- /manual-overlay -->
+
+<script>
+  window.showCurveMakeup    = false;
+  window.allButtonsMode     = false;
+  window.autoReleaseEnabled = false;
+  /* single fixed instrument accent — petrol scope colour */
+  window.PALETTES = { petrol: { name: 'Petrol', accent: '#4e93ad', dim: '#336e85' } };
+  (function () {
+    var p = window.PALETTES.petrol;
+    window.THEME = { accent: p.accent, key: 'petrol' };
+    document.documentElement.style.setProperty('--accent', p.accent);
+    document.documentElement.style.setProperty('--accent-dim', p.dim);
+  })();
+</script>
+<script src="presets.js"></script>
+<script src="app.js"></script>
+<script src="knobs.js"></script>
+<script src="theme.js"></script>
+<script>
+  /* Transfer curve makeup toggle */
+  (function () {
+    var cb = document.getElementById('curveMakeup');
+    if (!cb) return;
+    cb.checked = !!window.showCurveMakeup;
+    cb.addEventListener('change', function () {
+      window.showCurveMakeup = cb.checked;
+      if (typeof drawCompressorGraph === 'function') drawCompressorGraph();
+    });
+  })();
+
+  /* Preset buttons */
+  document.querySelectorAll('[data-preset]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (typeof applyPreset === 'function') applyPreset(btn.dataset.preset);
+    });
+  });
+
+  /* Compare card — always open */
+  (function () {
+    if (typeof buildCompareTable === 'function') buildCompareTable();
+  })();
+
+  /* Manual modal */
+  (function () {
+    var overlay   = document.getElementById('manualOverlay');
+    var openBtn   = document.getElementById('openManualBtn');
+    var closeBtn  = document.getElementById('closeManualBtn');
+    openBtn.addEventListener('click',  function () { overlay.classList.add('open'); });
+    closeBtn.addEventListener('click', function () { overlay.classList.remove('open'); });
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  })();
+
+  /* Init range bars with FREE preset */
+  (function () {
+    if (typeof window.COMPRESSOR_PRESETS !== 'undefined' && typeof updateRangeBars !== 'undefined') {
+      // updateRangeBars is defined inside presets.js closure — access via applyPreset
+    }
+    // Range bars already show 100% for FREE mode (set inline in HTML)
+  })();
+
+  /* ── Mobile tab navigation ── */
+  (function () {
+    var tabs = document.querySelectorAll('.mtab');
+    var body = document.querySelector('.body');
+
+    function isMobile() { return window.innerWidth <= 600; }
+
+    function setTab(key) {
+      tabs.forEach(function (t) { t.classList.toggle('active', t.dataset.tab === key); });
+      body.setAttribute('data-tab', key);
+    }
+
+    function clearTabs() {
+      body.removeAttribute('data-tab');
+      tabs.forEach(function (t) { t.classList.remove('active'); });
+    }
+
+    tabs.forEach(function (t) {
+      t.addEventListener('click', function () { setTab(t.dataset.tab); });
+    });
+
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (isMobile()) {
+          if (!body.hasAttribute('data-tab')) setTab('model');
+        } else {
+          clearTabs();
+        }
+      }, 100);
+    });
+
+    // Initialize on load
+    if (isMobile()) setTab('model');
+  })();
+
+  /* ── Mobile transport proxy ── */
+  (function () {
+    document.getElementById('mPlayOrigBtn').addEventListener('click', function () {
+      document.getElementById('playOrigBtn').click();
+    });
+    document.getElementById('mPlayBtn').addEventListener('click', function () {
+      document.getElementById('playBtn').click();
+    });
+    document.getElementById('mStopBtn').addEventListener('click', function () {
+      document.getElementById('stopBtn').click();
+    });
+  })();
+</script>
+</body>
+</html>
